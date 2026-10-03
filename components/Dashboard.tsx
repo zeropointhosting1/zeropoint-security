@@ -480,13 +480,20 @@ export default function Dashboard() {
 
       <section className="source-strip">
         <span className="eyebrow">INTELLIGENCE NETWORK · {sources.length || "—"} SOURCES</span>
-        {(sources.length ? sources : PENDING_SOURCES.map((name) => ({ name, status: "pending" as const, count: 0, url: "" }))).map((s) => (
-          <span key={s.name} title={`${s.count.toLocaleString()} records returned`}>
-            <i className={s.status} />
-            {s.url ? <a href={s.url} target="_blank" rel="noreferrer">{s.name}</a> : s.name}
-            <small>{s.status === "online" ? `${compact(s.count)} records` : s.status === "error" ? "Unavailable" : "Connecting"}</small>
-          </span>
-        ))}
+        <div className="marquee">
+          {/* Two identical copies scroll by half the track width, so the loop is seamless. */}
+          <div className="marquee-track">
+            {[false, true].map((copy) =>
+              (sources.length ? sources : PENDING_SOURCES.map((name) => ({ name, status: "pending" as const, count: 0, url: "" }))).map((s) => (
+                <span key={`${copy}-${s.name}`} title={`${s.count.toLocaleString()} records returned`} aria-hidden={copy || undefined} className={copy ? "marquee-copy" : undefined}>
+                  <i className={s.status} />
+                  {s.url ? <a href={s.url} target="_blank" rel="noreferrer" tabIndex={copy ? -1 : undefined}>{s.name}</a> : s.name}
+                  <small>{s.status === "online" ? `${compact(s.count)} records` : s.status === "error" ? "Unavailable" : "Connecting"}</small>
+                </span>
+              )),
+            )}
+          </div>
+        </div>
       </section>
       {openEvent && (
         <EventDetail

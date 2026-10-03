@@ -158,3 +158,13 @@ footer{align-items:center}
 @media(max-width:640px){.map-stage .map-legend{left:12px;right:12px;bottom:58px;flex-direction:row;flex-wrap:wrap;gap:6px 12px;padding:8px 10px;font-size:10px}.map-stage .map-legend small{display:none}.map-controls{left:12px;bottom:12px;gap:6px}.map-controls button{padding:7px 9px;font-size:10px}.map-toolbar{padding:10px 12px}.map-toolbar .scope{flex-wrap:nowrap;overflow-x:auto;width:100%;scrollbar-width:none}.map-toolbar .scope button{flex:none}}
 @media(max-width:480px){.headline{display:grid;grid-template-columns:1fr 1fr;gap:12px}.headline dd{font-size:18px}.map-stage{height:440px}.intel-panel{height:560px}}
 @media(max-width:480px){.tabs{gap:16px;padding:0 16px}.tabs button{white-space:nowrap}}
+
+/* ---- Sources marquee: scrolls continuously, pauses on hover ---- */
+.source-strip{flex-wrap:nowrap}
+.marquee{flex:1;min-width:0;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}
+.marquee-track{display:flex;width:max-content;animation:marquee 70s linear infinite}
+.marquee-track>span{flex:none;padding-right:34px;font-size:11px}
+.marquee:hover .marquee-track,.marquee:focus-within .marquee-track{animation-play-state:paused}
+@keyframes marquee{to{transform:translateX(-50%)}}
+@media(max-width:800px){.source-strip{flex-wrap:wrap}.marquee{flex-basis:100%}.marquee-track{animation-duration:50s}}
+@media(prefers-reduced-motion:reduce){.marquee{-webkit-mask-image:none;mask-image:none}.marquee-track{width:auto;flex-wrap:wrap;row-gap:14px}.marquee-copy{display:none}}
