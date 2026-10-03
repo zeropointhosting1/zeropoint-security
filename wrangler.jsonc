@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Must match the Worker name in the Cloudflare dashboard (Workers Builds deploys with `npx wrangler deploy`).
+  "name": "zeropoint-security",
+  "compatibility_date": "2026-10-01",
+  // Static-only Worker: serves the `npm run build` export, including the out/api/* data snapshot.
+  "assets": {
+    "directory": "./out",
+    "not_found_handling": "404-page"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
