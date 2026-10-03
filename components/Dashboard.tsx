@@ -131,12 +131,15 @@ export default function Dashboard() {
     setRotating(false);
   }
 
+  /** Shown in the header, so the globe gets the first screen. */
+  const headline: Array<[string, string, string, string]> = [
+    ["INDICATORS", totals ? compact(totals.indicators) : "—", `Malicious IPs across ${online || "—"} live feeds`, "var(--cyan)"],
+    ["LIVE EVENTS · 24H", data ? compact(data.alerts.length) : "—", "Latest timestamped reports (24h)", "#ff4d6d"],
+    ["DDOS NODES", totals ? compact(totals.byKind.ddos) : "—", "Mirai, Mozi, Gafgyt & kin", "var(--orange)"],
+    ["COUNTRIES", totals ? String(totals.countries) : "—", "Observed hostile infrastructure", "var(--text)"],
+  ];
   const metrics: Array<[string, string, string, string]> = [
-    ["TRACKED INDICATORS", totals ? compact(totals.indicators) : "—", `Malicious IPs across ${online || "—"} live feeds`, "var(--cyan)"],
-    ["LIVE EVENTS", data ? compact(data.alerts.length) : "—", "Latest timestamped reports (24h)", "#ff4d6d"],
-    ["DDOS BOTNET NODES", totals ? compact(totals.byKind.ddos) : "—", "Mirai, Mozi, Gafgyt & kin", "var(--orange)"],
     ["MALWARE INFRASTRUCTURE", totals ? compact(totals.byKind.botnet + totals.byKind.malware) : "—", "C2 servers & payload hosts", "var(--red)"],
-    ["SOURCE COUNTRIES", totals ? String(totals.countries) : "—", "Observed hostile infrastructure", "var(--text)"],
     ["KNOWN EXPLOITED CVEs", data ? compact(data.kevTotal) : "—", "CISA vulnerability catalog", "var(--amber)"],
     ["RANSOMWARE CLAIMS", data ? String(victims.length) : "—", "Latest leak-site victims", "var(--yellow)"],
     ["ACTIVE ATTACKERS", totals ? compact(totals.byKind.scanner) : "—", "Scanning & brute-force sources", "var(--amber)"],
@@ -155,22 +158,25 @@ export default function Dashboard() {
             <p>GLOBAL THREAT INTELLIGENCE</p>
           </div>
         </a>
+        <dl className="headline" aria-label="Intelligence summary">
+          {headline.map(([label, value, note, color]) => (
+            <div key={label} title={note}>
+              <dt>{label}</dt>
+              <dd style={{ color }}>{loading && !data ? "—" : value}</dd>
+            </div>
+          ))}
+        </dl>
         <div className="header-right">
-          <span className={`status ${online ? "online" : ""}`}>
-            <i />
-            {loading && !data ? "SYNCING FEEDS" : online ? `${online}/${sources.length} FEEDS ONLINE` : "FEEDS UNAVAILABLE"}
-          </span>
+          <div className="sync">
+            <span className={`status ${online ? "online" : ""}`}>
+              <i />
+              {loading && !data ? "SYNCING FEEDS" : online ? `${online}/${sources.length} FEEDS ONLINE` : "FEEDS UNAVAILABLE"}
+            </span>
+            <span className="updated">{data ? `Last sync ${timeAgo(data.updatedAt)}` : "Connecting to public intelligence"}</span>
+          </div>
           <button onClick={load} disabled={loading}>{loading ? "Syncing..." : "↻ Refresh"}</button>
         </div>
       </header>
-
-      <section className="intro">
-        <div>
-          <p className="eyebrow">INTELLIGENCE / GLOBAL OVERVIEW</p>
-          <h2>A world in motion.<span> Every signal matters.</span></h2>
-        </div>
-        <span className="updated">{data ? `Last sync ${timeAgo(data.updatedAt)}` : "Connecting to public intelligence"}</span>
-      </section>
 
       {data && Date.now() - Date.parse(data.updatedAt) > STALE_MS && (
         <div className="notice" role="status">
@@ -182,23 +188,9 @@ export default function Dashboard() {
         <div className="notice" role="status">Some intelligence is unavailable. {error || data?.errors.join(" · ")}</div>
       )}
 
-      <section className="metrics" aria-label="Intelligence summary">
-        {metrics.map(([label, value, note, color]) => (
-          <div className="metric" key={label}>
-            <span>{label}</span>
-            <strong style={{ color }}>{loading && !data ? "—" : value}</strong>
-            <small>{note}</small>
-          </div>
-        ))}
-      </section>
-
-      <section className="workspace">
+      <section className="command">
         <div className="map-panel">
-          <div className="panel-title">
-            <div>
-              <span className="eyebrow">GLOBAL TELEMETRY</span>
-              <h3>Threat landscape</h3>
-            </div>
+          <div className="map-toolbar">
             <div className="scope" role="group" aria-label="Show">
               {FILTERS.map(([key, label]) => (
                 <button key={key} aria-pressed={filter === key} className={`scope-${key} ${filter === key ? "active" : ""}`} onClick={() => setFilter(key)}>
@@ -206,6 +198,10 @@ export default function Dashboard() {
                 </button>
               ))}
             </div>
+            <span className="map-count">
+              {visible.length.toLocaleString()} mapped signals
+              {totals && totals.geolocated > threats.length ? ` · top of ${compact(totals.geolocated)}` : ""}
+            </span>
           </div>
           <div className="map-stage">
             <GlobeView
@@ -218,32 +214,6 @@ export default function Dashboard() {
               onSelect={focus}
               rotating={rotating && !followLive}
             />
-            <div className="map-coordinate">
-              SOURCE INTELLIGENCE<br />
-              <span>
-                {visible.length.toLocaleString()} mapped signals
-                {totals && totals.geolocated > threats.length ? ` · top of ${compact(totals.geolocated)}` : ""}
-              </span>
-            </div>
-            <div className="live-ticker" aria-live="polite" aria-label="Live alerts">
-              <div className="live-ticker-head">
-                <span className={`live-dot ${live.connected ? "on" : ""}`} />
-                LIVE ALERTS
-                {live.pending > 0 && <small>{live.pending} queued</small>}
-              </div>
-              {stream.slice(0, 4).map((a) => (
-                <button className="ticker-item" key={a.id} style={{ ["--c" as string]: alertColor(a.kind) }} onClick={() => openAlert(a)} title="Open event details">
-                  <span className="ticker-kind">{alertLabel(a.kind)}</span>
-                  <strong>{a.title}</strong>
-                  <span className="ticker-meta">{a.detail} · {timeAgo(a.time)}</span>
-                </button>
-              ))}
-              {!stream.length && (
-                <div className="ticker-item muted">
-                  {!live.connected ? "Connecting to live feeds..." : filter === "all" ? "Waiting for the next report..." : "Waiting for matching reports..."}
-                </div>
-              )}
-            </div>
             <div className="map-controls">
               <button aria-pressed={rotating} onClick={() => setRotating(!rotating)}>{rotating ? "Ⅱ Pause orbit" : "▷ Resume orbit"}</button>
               <button aria-pressed={followLive} className={followLive ? "active" : ""} onClick={() => setFollowLive(!followLive)}>
@@ -251,109 +221,38 @@ export default function Dashboard() {
               </button>
               <button onClick={() => { setSelected(null); setOpenEvent(null); setFollowLive(false); setRotating(true); }}>Reset view</button>
             </div>
-          </div>
-          <div className="map-legend">
-            <span><i className="red" /> Malware C2</span>
-            <span><i className="orange" /> DDoS botnet</span>
-            <span><i className="purple" /> Payload host</span>
-            <span><i className="amber" /> Attacker</span>
-            <span><i className="blue" /> Blocklisted</span>
-            <span><i className="yellow" /> Ransomware victim</span>
-            <span><i className="beacon-dot" /> Live beacon</span>
-            <small>Drag to explore · Scroll to zoom · Select a signal</small>
-          </div>
+            <div className="map-legend">
+              <span><i className="red" /> Malware C2</span>
+              <span><i className="orange" /> DDoS botnet</span>
+              <span><i className="purple" /> Payload host</span>
+              <span><i className="amber" /> Attacker</span>
+              <span><i className="blue" /> Blocklisted</span>
+              <span><i className="yellow" /> Ransomware victim</span>
+              <span><i className="beacon-dot" /> Live beacon</span>
+              <small>Drag to explore · Scroll to zoom · Select a signal</small>
+            </div>
 
-          {selected && (
-            <div className="inspector">
-              <div className="inspector-head">
-                <span className="eyebrow">SELECTED INDICATOR</span>
-                <button onClick={() => setSelected(null)} aria-label="Close indicator details">✕</button>
+            {selected && (
+              <div className="inspector">
+                <div className="inspector-head">
+                  <span className="eyebrow">SELECTED INDICATOR</span>
+                  <button onClick={() => setSelected(null)} aria-label="Close indicator details">✕</button>
+                </div>
+                <h3>{selected.ip}{selected.port ? `:${selected.port}` : ""} <span className={`badge ${selected.kind}`}>{KIND_LABEL[selected.kind].toUpperCase()}</span></h3>
+                <p>{selected.city ? `${selected.city}, ` : ""}{selected.country} · {selected.activity ?? selected.source}</p>
+                <dl>
+                  <div><dt>Reported by</dt><dd>{selected.feeds.join(", ")}</dd></div>
+                  <div><dt>Last observed</dt><dd>{selected.lastSeen || "Not provided"}</dd></div>
+                  {selected.malware && <div><dt>Malware family</dt><dd>{selected.malware}</dd></div>}
+                  {selected.reports > 0 && <div><dt>{selected.source === "IPsum" ? "Blocklists" : "Reported records"}</dt><dd>{compact(selected.reports)}</dd></div>}
+                  {selected.confidence !== undefined && <div><dt>Source confidence</dt><dd>{selected.confidence}%</dd></div>}
+                </dl>
+                <button onClick={() => setAck((prev) => prev.includes(selected.id) ? prev.filter((id) => id !== selected.id) : [...prev, selected.id])}>
+                  {ack.includes(selected.id) ? "✓ Reviewed · Undo" : "Mark reviewed"}
+                </button>
+                <small>Review status lasts for this session.</small>
               </div>
-              <h3>{selected.ip}{selected.port ? `:${selected.port}` : ""} <span className={`badge ${selected.kind}`}>{KIND_LABEL[selected.kind].toUpperCase()}</span></h3>
-              <p>{selected.city ? `${selected.city}, ` : ""}{selected.country} · {selected.activity ?? selected.source}</p>
-              <dl>
-                <div><dt>Reported by</dt><dd>{selected.feeds.join(", ")}</dd></div>
-                <div><dt>Last observed</dt><dd>{selected.lastSeen || "Not provided"}</dd></div>
-                {selected.malware && <div><dt>Malware family</dt><dd>{selected.malware}</dd></div>}
-                {selected.reports > 0 && <div><dt>{selected.source === "IPsum" ? "Blocklists" : "Reported records"}</dt><dd>{compact(selected.reports)}</dd></div>}
-                {selected.confidence !== undefined && <div><dt>Source confidence</dt><dd>{selected.confidence}%</dd></div>}
-              </dl>
-              <button onClick={() => setAck((prev) => prev.includes(selected.id) ? prev.filter((id) => id !== selected.id) : [...prev, selected.id])}>
-                {ack.includes(selected.id) ? "✓ Reviewed · Undo" : "Mark reviewed"}
-              </button>
-              <small>Review status lasts for this session.</small>
-            </div>
-          )}
-
-          <div className="insights">
-            <div className="geography">
-              <div className="panel-title"><h3>Source distribution</h3><span className="eyebrow">ALL INDICATORS</span></div>
-              {topCountries.length ? topCountries.slice(0, 8).map((c, i) => (
-                <div className="country-row" key={c.cc}>
-                  <span className="rank">{String(i + 1).padStart(2, "0")}</span>
-                  <span>{c.name}</span>
-                  <div className="bar-track"><i style={{ width: `${(c.count / topCountries[0].count) * 100}%` }} /></div>
-                  <strong>{compact(c.count)}</strong>
-                </div>
-              )) : <p className="empty">{loading ? "Locating source infrastructure..." : "No geolocated indicators available."}</p>}
-            </div>
-            <div className="geography">
-              <div className="panel-title"><h3>Malware families</h3><span className="eyebrow">C2 · HOSTS · SAMPLES</span></div>
-              {topMalware.slice(0, 8).map((m, i) => (
-                <div className="country-row" key={m.name}>
-                  <span className="rank">{String(i + 1).padStart(2, "0")}</span>
-                  <span>{m.name}</span>
-                  <div className="bar-track red"><i style={{ width: `${(m.count / topMalware[0].count) * 100}%` }} /></div>
-                  <strong>{compact(m.count)}</strong>
-                </div>
-              ))}
-              {!topMalware.length && <p className="empty">{loading ? "Classifying malware..." : "No malware families reported."}</p>}
-            </div>
-            <div className="geography">
-              <div className="panel-title"><h3>Most attacked ports</h3><span className="eyebrow">DSHIELD · TODAY</span></div>
-              {topPorts.slice(0, 8).map((p, i) => (
-                <div className="country-row" key={p.port}>
-                  <span className="rank">{String(i + 1).padStart(2, "0")}</span>
-                  <span>Port {p.port}</span>
-                  <div className="bar-track amber"><i style={{ width: `${(p.records / topPorts[0].records) * 100}%` }} /></div>
-                  <strong>{compact(p.records)}</strong>
-                </div>
-              ))}
-              {!topPorts.length && <p className="empty">{loading ? "Reading sensor network..." : "Port data unavailable."}</p>}
-            </div>
-            <div className="geography">
-              {ddosFlows.length ? (
-                <>
-                  <div className="panel-title"><h3>DDoS attack flows</h3><span className="eyebrow">CLOUDFLARE RADAR · 24H</span></div>
-                  {ddosFlows.slice(0, 8).map((f, i) => (
-                    <div className="country-row" key={f.id}>
-                      <span className="rank">{f.layer}</span>
-                      <span title={`${f.origin} → ${f.target}`}>{f.originCc} → {f.targetCc}</span>
-                      <div className="bar-track orange"><i style={{ width: `${(f.share / ddosFlows[0].share) * 100}%` }} /></div>
-                      <strong>{f.share.toFixed(1)}%</strong>
-                    </div>
-                  ))}
-                </>
-              ) : (
-                <>
-                  <div className="panel-title"><h3>DDoS botnets</h3><span className="eyebrow">{totals ? `${compact(totals.byKind.ddos)} NODES` : "NODES"}</span></div>
-                  {ddosFamilies.map((f, i) => (
-                    <div className="country-row" key={f.name}>
-                      <span className="rank">{String(i + 1).padStart(2, "0")}</span>
-                      <span>{f.name}</span>
-                      <div className="bar-track orange"><i style={{ width: `${(f.count / ddosFamilies[0].count) * 100}%` }} /></div>
-                      <strong>{compact(f.count)}</strong>
-                    </div>
-                  ))}
-                  {!ddosFamilies.length && <p className="empty">{loading ? "Finding DDoS infrastructure..." : "No DDoS botnet nodes reported."}</p>}
-                  <p className="hint">
-                    {data?.ddosFlowsEnabled
-                      ? "Cloudflare Radar is configured but returned no flows. Check the token's Radar permission."
-                      : <>Add a free <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noreferrer">Cloudflare API token</a> as <code>CLOUDFLARE_API_TOKEN</code> in <code>.env.local</code> to draw live DDoS attack flows on the globe.</>}
-                  </p>
-                </>
-              )}
-            </div>
+            )}
           </div>
         </div>
 
@@ -496,6 +395,87 @@ export default function Dashboard() {
             </>
           )}
         </aside>
+      </section>
+
+      <section className="insights" aria-label="Breakdowns">
+        <div className="geography">
+          <div className="panel-title"><h3>Source distribution</h3><span className="eyebrow">ALL INDICATORS</span></div>
+          {topCountries.length ? topCountries.slice(0, 8).map((c, i) => (
+            <div className="country-row" key={c.cc}>
+              <span className="rank">{String(i + 1).padStart(2, "0")}</span>
+              <span>{c.name}</span>
+              <div className="bar-track"><i style={{ width: `${(c.count / topCountries[0].count) * 100}%` }} /></div>
+              <strong>{compact(c.count)}</strong>
+            </div>
+          )) : <p className="empty">{loading ? "Locating source infrastructure..." : "No geolocated indicators available."}</p>}
+        </div>
+        <div className="geography">
+          <div className="panel-title"><h3>Malware families</h3><span className="eyebrow">C2 · HOSTS · SAMPLES</span></div>
+          {topMalware.slice(0, 8).map((m, i) => (
+            <div className="country-row" key={m.name}>
+              <span className="rank">{String(i + 1).padStart(2, "0")}</span>
+              <span>{m.name}</span>
+              <div className="bar-track red"><i style={{ width: `${(m.count / topMalware[0].count) * 100}%` }} /></div>
+              <strong>{compact(m.count)}</strong>
+            </div>
+          ))}
+          {!topMalware.length && <p className="empty">{loading ? "Classifying malware..." : "No malware families reported."}</p>}
+        </div>
+        <div className="geography">
+          <div className="panel-title"><h3>Most attacked ports</h3><span className="eyebrow">DSHIELD · TODAY</span></div>
+          {topPorts.slice(0, 8).map((p, i) => (
+            <div className="country-row" key={p.port}>
+              <span className="rank">{String(i + 1).padStart(2, "0")}</span>
+              <span>Port {p.port}</span>
+              <div className="bar-track amber"><i style={{ width: `${(p.records / topPorts[0].records) * 100}%` }} /></div>
+              <strong>{compact(p.records)}</strong>
+            </div>
+          ))}
+          {!topPorts.length && <p className="empty">{loading ? "Reading sensor network..." : "Port data unavailable."}</p>}
+        </div>
+        <div className="geography">
+          {ddosFlows.length ? (
+            <>
+              <div className="panel-title"><h3>DDoS attack flows</h3><span className="eyebrow">CLOUDFLARE RADAR · 24H</span></div>
+              {ddosFlows.slice(0, 8).map((f, i) => (
+                <div className="country-row" key={f.id}>
+                  <span className="rank">{f.layer}</span>
+                  <span title={`${f.origin} → ${f.target}`}>{f.originCc} → {f.targetCc}</span>
+                  <div className="bar-track orange"><i style={{ width: `${(f.share / ddosFlows[0].share) * 100}%` }} /></div>
+                  <strong>{f.share.toFixed(1)}%</strong>
+                </div>
+              ))}
+            </>
+          ) : (
+            <>
+              <div className="panel-title"><h3>DDoS botnets</h3><span className="eyebrow">{totals ? `${compact(totals.byKind.ddos)} NODES` : "NODES"}</span></div>
+              {ddosFamilies.map((f, i) => (
+                <div className="country-row" key={f.name}>
+                  <span className="rank">{String(i + 1).padStart(2, "0")}</span>
+                  <span>{f.name}</span>
+                  <div className="bar-track orange"><i style={{ width: `${(f.count / ddosFamilies[0].count) * 100}%` }} /></div>
+                  <strong>{compact(f.count)}</strong>
+                </div>
+              ))}
+              {!ddosFamilies.length && <p className="empty">{loading ? "Finding DDoS infrastructure..." : "No DDoS botnet nodes reported."}</p>}
+              <p className="hint">
+                {data?.ddosFlowsEnabled
+                  ? "Cloudflare Radar returned no DDoS flows for the last 24 hours."
+                  : "Live DDoS attack flows are unavailable right now; showing DDoS botnet infrastructure instead."}
+              </p>
+            </>
+          )}
+        </div>
+      </section>
+
+      <section className="metrics" aria-label="More statistics">
+        {metrics.map(([label, value, note, color]) => (
+          <div className="metric" key={label}>
+            <span>{label}</span>
+            <strong style={{ color }}>{loading && !data ? "—" : value}</strong>
+            <small>{note}</small>
+          </div>
+        ))}
       </section>
 
       <section className="source-strip">
