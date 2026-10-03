@@ -18,6 +18,17 @@ On first start the server downloads the free DB-IP city database (~60 MB compres
 
 `npm run build` produces a static site in `out/`. It then runs `scripts/collect.ts`, which fetches every feed once and writes `out/api/threats` and `out/api/alerts` as a data snapshot. In Cloudflare Pages, set the build command to `npm run build` and the output directory to `out`. The data refreshes on each rebuild. The live `/api` routes (`route.dev.ts`) only run under `npm run dev`.
 
+### Live data (collector VM → Supabase)
+
+In production, `wrangler.jsonc` deploys `worker/index.ts`, which serves `/api/threats` and `/api/alerts` from Supabase (`public.snapshots`). If Supabase is unreachable or empty, it falls back to the build snapshot. An Ubuntu VM keeps Supabase fresh by running `scripts/collect.ts --upload` every 5 minutes. The VM needs no inbound ports.
+
+1. Run `supabase/setup.sql` once in the Supabase SQL Editor, with `CHANGE_ME` replaced by a strong password. Never commit the password.
+2. On the VM, install Node 22, create a `zeropoint` system user, and clone the repo to `/opt/zeropoint/app`. Then run `sudo -u zeropoint bash -c 'cd /opt/zeropoint/app && npm ci'`.
+3. Create `/etc/zeropoint/collector.env` (root-owned, mode 600) with one line: `SUPABASE_DB_URL=postgresql://zeropoint_collector.<project-ref>:<password>@<session-pooler-host>:5432/postgres`. The user must be `zeropoint_collector`, never `postgres`.
+4. Copy `deploy/zeropoint-collector.{service,timer}` to `/etc/systemd/system/`, then run `systemctl daemon-reload`, `systemctl start zeropoint-collector` (a test run), and `systemctl enable --now zeropoint-collector.timer`.
+
+Check the logs with `journalctl -u zeropoint-collector`. To update the VM, run `sudo -u zeropoint bash -c 'cd /opt/zeropoint/app && git pull && npm ci'`. The GitHub Actions workflow in `.github/workflows/collect.yml` is a manual-only alternative.
+
 ### Optional: live DDoS attack flows
 
 Copy `.env.local.example` to `.env.local` and set `CLOUDFLARE_API_TOKEN`. Use a free token with **Account · Radar · Read** from https://dash.cloudflare.com/profile/api-tokens. Then restart the server. The globe draws Cloudflare Radar's top layer 3 and layer 7 DDoS origin → target country pairs for the last 24 hours, with arc thickness showing each pair's share of attacks. Without a token, the DDoS panel shows DDoS botnet infrastructure instead.

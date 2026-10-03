@@ -1,0 +1,23 @@
+# Runs scripts/collect.ts --upload once; zeropoint-collector.timer starts it every 5 minutes.
+# Install: copy both units to /etc/systemd/system, then `systemctl daemon-reload`.
+[Unit]
+Description=Zeropoint threat feed collector
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=zeropoint
+WorkingDirectory=/opt/zeropoint/app
+# One line: SUPABASE_DB_URL=postgresql://zeropoint_collector.<project-ref>:<password>@<pooler-host>:5432/postgres
+# (optional CLOUDFLARE_API_TOKEN=...). Root-owned, mode 600.
+EnvironmentFile=/etc/zeropoint/collector.env
+# Not npx: it would try to download tsx into a cache the sandbox below makes read-only.
+ExecStart=/opt/zeropoint/app/node_modules/.bin/tsx scripts/collect.ts --upload
+TimeoutStartSec=10min
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+# The DB-IP geolocation database downloads here and refreshes monthly.
+ReadWritePaths=/opt/zeropoint/app/data

@@ -54,9 +54,11 @@ async function uploadToSupabase(files: Record<"threats" | "alerts", string>) {
     // One transaction, so the site never serves alerts from a newer run than threats.
     await sql.begin(async (tx) => {
       for (const name of ["threats", "alerts"] as const) {
+        // Bind as text: a json-typed parameter makes postgres.js JSON.stringify it again,
+        // storing a quoted string instead of the object.
         await tx`
           insert into public.snapshots (name, payload, updated_at)
-          values (${name}, ${files[name]}::json, now())
+          values (${name}, ${files[name]}::text::json, now())
           on conflict (name) do update set payload = excluded.payload, updated_at = excluded.updated_at`;
       }
     });

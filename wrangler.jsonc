@@ -14,7 +14,7 @@
   "vars": {
     "SUPABASE_URL": "https://vhrzezllvfcujlrdxmha.supabase.co",
     // Publishable (anon) key: public by design; RLS only lets it read public.snapshots.
-    "SUPABASE_PUBLISHABLE_KEY": "SET_ME"
+    "SUPABASE_PUBLISHABLE_KEY": "sb_publishable_uH2LaioWkeXJGNqIznYS2Q_R8W0byWq"
   },
   "observability": {
     "enabled": true
