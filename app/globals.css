@@ -168,3 +168,47 @@ footer{align-items:center}
 @keyframes marquee{to{transform:translateX(-50%)}}
 @media(max-width:800px){.source-strip{flex-wrap:wrap}.marquee{flex-basis:100%}.marquee-track{animation-duration:50s}}
 @media(prefers-reduced-motion:reduce){.marquee{-webkit-mask-image:none;mask-image:none}.marquee-track{width:auto;flex-wrap:wrap;row-gap:14px}.marquee-copy{display:none}}
+
+/* ---- Phone polish: compact header, stat tiles, edge-to-edge globe, swipeable charts ---- */
+@media(max-width:640px){
+  .topbar{min-height:0;padding:12px 0 0;flex-wrap:wrap;gap:12px}
+  .brand-logo{width:38px;height:38px}
+  .brand h1{font-size:14px;letter-spacing:1.4px}
+  .brand p{display:none}
+  .header-right{gap:8px}
+  .header-right .sync{display:none}
+  .refresh{width:40px;height:40px;padding:0;border-radius:50%;font-size:17px;display:grid;place-items:center}
+  .refresh .btn-label{display:none}
+  .headline{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 0 12px}
+  .headline div{background:linear-gradient(120deg,#121c25,#0d141c);border:1px solid var(--border);border-radius:10px;padding:11px 13px}
+  .headline dt{font-size:8px;letter-spacing:1.2px}
+  .headline dd{font-size:22px;margin-top:6px}
+
+  .command{margin:0 -12px 18px;gap:18px}
+  .map-panel{border-radius:0;border-left:0;border-right:0}
+  .map-toolbar{padding:10px 12px 8px;gap:6px}
+  .map-toolbar .scope{-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent);mask-image:linear-gradient(90deg,#000 88%,transparent);padding-right:24px}
+  .map-count{font-size:9px}
+  .map-stage{height:min(64vh,520px);min-height:380px}
+  .map-stage .map-legend{top:10px;bottom:auto;left:0;right:0;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;background:none;border:0;border-radius:0;backdrop-filter:none;padding:0 12px;gap:14px;font-size:10px;pointer-events:auto;-webkit-mask-image:linear-gradient(90deg,#000 85%,transparent);mask-image:linear-gradient(90deg,#000 85%,transparent)}
+  .map-stage .map-legend::-webkit-scrollbar,.insights::-webkit-scrollbar{display:none}
+  .map-controls{left:50%;transform:translateX(-50%);bottom:14px;background:#0a1520d9;border:1px solid #233544;border-radius:999px;padding:4px;gap:2px;backdrop-filter:blur(6px);white-space:nowrap}
+  .map-controls button{border:0;background:none;border-radius:999px;padding:7px 11px}
+  .map-controls button.active{background:#0f3346}
+  .map-stage .inspector{top:auto;bottom:64px;left:12px;right:12px;width:auto;max-height:55%}
+  .intel-panel{height:min(78vh,640px);margin:0 12px;border-radius:12px}
+  .intel-panel .panel-title{padding:14px 16px}
+  .signal-icon{font-size:26px}
+  .tabs{overflow-x:auto;scrollbar-width:none}
+
+  .insights{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:12px;margin:0 -12px 18px;padding:0 12px 4px;scrollbar-width:none}
+  .insights .geography:nth-child(n){flex:0 0 86%;scroll-snap-align:center;padding-bottom:12px}
+  .insights .geography .panel-title{padding:16px 16px 10px}
+  .insights .country-row{padding:6px 16px}
+  .metrics{gap:8px}
+  .metric{padding:12px 13px;border-radius:10px}.metric>span{font-size:8px}.metric strong{font-size:20px;margin:6px 0 2px}.metric small{font-size:10px}
+
+  .source-strip{padding:18px 0;gap:10px}
+  footer{align-items:center;text-align:center;padding:20px 0 28px}
+  .footer-logo{width:84px}
+}

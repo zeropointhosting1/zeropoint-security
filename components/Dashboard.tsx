@@ -174,7 +174,10 @@ export default function Dashboard() {
             </span>
             <span className="updated">{data ? `Last sync ${timeAgo(data.updatedAt)}` : "Connecting to public intelligence"}</span>
           </div>
-          <button onClick={load} disabled={loading}>{loading ? "Syncing..." : "↻ Refresh"}</button>
+          <button className="refresh" onClick={load} disabled={loading} aria-label="Refresh feeds">
+            <span aria-hidden="true">↻</span>
+            <span className="btn-label">{loading ? " Syncing..." : " Refresh"}</span>
+          </button>
         </div>
       </header>
 
