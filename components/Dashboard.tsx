@@ -13,6 +13,8 @@ const GlobeView = dynamic(() => import("./GlobeView"), {
 });
 
 const EMPTY: Threat[] = [];
+/** Warn when the collector has not uploaded fresh data for this long. */
+const STALE_MS = 30 * 60_000;
 /** Rendering tens of thousands of cards would freeze the page; search narrows the rest. */
 const LIST_LIMIT = 200;
 /** One filter drives the globe, live alerts, beacons and the indicator list. */
@@ -169,6 +171,12 @@ export default function Dashboard() {
         </div>
         <span className="updated">{data ? `Last sync ${timeAgo(data.updatedAt)}` : "Connecting to public intelligence"}</span>
       </section>
+
+      {data && Date.now() - Date.parse(data.updatedAt) > STALE_MS && (
+        <div className="notice" role="status">
+          Data is stale: the collector last synced {timeAgo(data.updatedAt)}. Live feeds resume when it reconnects.
+        </div>
+      )}
 
       {(error || !!data?.errors.length) && (
         <div className="notice" role="status">Some intelligence is unavailable. {error || data?.errors.join(" · ")}</div>
