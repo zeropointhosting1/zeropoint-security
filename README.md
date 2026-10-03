@@ -14,6 +14,10 @@ On Windows PowerShell with script execution disabled, use `npm.cmd` instead of `
 
 On first start the server downloads the free DB-IP city database (~60 MB compressed, ~125 MB on disk) into `data/`. It refreshes monthly. Until it's ready, a subset of IPs is geolocated through ip-api.com.
 
+### Deploy (Cloudflare Pages)
+
+`npm run build` produces a static site in `out/`. It then runs `scripts/collect.ts`, which fetches every feed once and writes `out/api/threats` and `out/api/alerts` as a data snapshot. In Cloudflare Pages, set the build command to `npm run build` and the output directory to `out`. The data refreshes on each rebuild. The live `/api` routes (`route.dev.ts`) only run under `npm run dev`.
+
 ### Optional: live DDoS attack flows
 
 Copy `.env.local.example` to `.env.local` and set `CLOUDFLARE_API_TOKEN`. Use a free token with **Account · Radar · Read** from https://dash.cloudflare.com/profile/api-tokens. Then restart the server. The globe draws Cloudflare Radar's top layer 3 and layer 7 DDoS origin → target country pairs for the last 24 hours, with arc thickness showing each pair's share of attacks. Without a token, the DDoS panel shows DDoS botnet infrastructure instead.
