@@ -113,8 +113,24 @@ export interface FeedStatus {
   url: string;
 }
 
+/** Zeropoint's own Cowrie SSH/Telnet honeypot. Strings are attacker-supplied. */
+export interface HoneypotStats {
+  sessions: number;
+  uniqueIps: number;
+  failed: number;
+  success: number;
+  topUsers: [string, number][];
+  topPasswords: [string, number][];
+  topCommands: [string, number][];
+  /** Attacker IPs with the last two octets masked by the honeypot. */
+  topIps: [string, number][];
+  updated: string;
+}
+
 export interface ThreatPayload {
   sources: FeedStatus[];
+  /** Null when the honeypot feed is unreachable. */
+  honeypot: HoneypotStats | null;
   ransomware: RansomwareVictim[];
   alerts: LiveAlert[];
   /** Empty unless CLOUDFLARE_API_TOKEN is configured. */

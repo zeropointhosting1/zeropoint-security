@@ -94,6 +94,7 @@ export default function Dashboard() {
   const topMalware = data?.topMalware ?? [];
   const ddosFlows = data?.ddosFlows ?? [];
   const ddosFamilies = data?.ddosFamilies ?? [];
+  const hp = data?.honeypot;
   const showFlows = filter === "all" || filter === "ddos";
   const stream = useMemo(() => live.stream.filter((a) => inScope(filter, a.kind)), [live.stream, filter]);
   const indicatorByIp = useMemo(() => new Map(threats.map((t) => [t.ip, t])), [threats]);
@@ -399,6 +400,62 @@ export default function Dashboard() {
           )}
         </aside>
       </section>
+
+      {hp && (
+        <section className="honeypot" aria-label="Zeropoint honeypot">
+          <div className="panel-title">
+            <div>
+              <span className="eyebrow"><span className={`live-dot ${hp.sessions ? "on" : ""}`} />ZEROPOINT HONEYPOT · SSH &amp; TELNET</span>
+              <h3>Attacks on our own sensor</h3>
+            </div>
+            <span className="updated">{hp.updated ? `Updated ${timeAgo(hp.updated)}` : ""}</span>
+          </div>
+          <div className="hp-stats">
+            {([
+              ["ATTACK SESSIONS", hp.sessions, "var(--mint)"],
+              ["UNIQUE ATTACKERS", hp.uniqueIps, "var(--cyan)"],
+              ["FAILED LOGINS", hp.failed, "var(--amber)"],
+              ["LOGINS ACCEPTED", hp.success, "var(--red)"],
+            ] as const).map(([label, value, color]) => (
+              <div key={label}>
+                <span>{label}</span>
+                <strong style={{ color }}>{compact(value)}</strong>
+              </div>
+            ))}
+          </div>
+          {hp.sessions ? (
+            <div className="hp-lists">
+              {([
+                ["Usernames tried", hp.topUsers],
+                ["Passwords tried", hp.topPasswords],
+                ["Commands run", hp.topCommands],
+                ["Attacker networks", hp.topIps],
+              ] as const).map(([title, rows]) => (
+                <div className="geography" key={title}>
+                  <div className="panel-title"><h3>{title}</h3></div>
+                  {rows.map(([value, count], i) => (
+                    <div className="country-row" key={`${i}-${value}`}>
+                      <span className="rank">{String(i + 1).padStart(2, "0")}</span>
+                      <code title={value}>{value || "(empty)"}</code>
+                      <div className="bar-track mint"><i style={{ width: `${(count / rows[0][1]) * 100}%` }} /></div>
+                      <strong>{compact(count)}</strong>
+                    </div>
+                  ))}
+                  {!rows.length && <p className="empty">Nothing recorded yet.</p>}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="empty hp-waiting">
+              Listening on SSH and Telnet. Bots usually find a new server within an hour; attacks will appear here as they arrive.
+            </p>
+          )}
+          <p className="hint hp-note">
+            A decoy server that only Zeropoint runs: every number here is a real attack against it. &ldquo;Logins accepted&rdquo; land
+            in a fake shell. Attacker IPs are shown as networks (last two octets hidden).
+          </p>
+        </section>
+      )}
 
       <section className="insights" aria-label="Breakdowns">
         <div className="geography">

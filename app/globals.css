@@ -212,3 +212,32 @@ footer{align-items:center}
   footer{align-items:center;text-align:center;padding:20px 0 28px}
   .footer-logo{width:84px}
 }
+
+/* ---- Zeropoint honeypot panel ---- */
+.bar-track.mint i{background:linear-gradient(90deg,#1f6b55,var(--mint))}
+.honeypot{border:1px solid #1f4d43;background:linear-gradient(160deg,#0e1a1c,var(--panel) 40%);border-radius:10px;margin-bottom:16px;overflow:hidden}
+.honeypot>.panel-title{padding:18px 22px 12px}
+.honeypot .eyebrow .live-dot{vertical-align:0}
+.hp-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:0 22px 18px}
+.hp-stats div{border:1px solid var(--border);background:#0b141b;border-radius:8px;padding:13px 16px}
+.hp-stats span{font:9px var(--font-mono),monospace;letter-spacing:1.2px;color:var(--muted)}
+.hp-stats strong{display:block;font-size:26px;font-weight:500;letter-spacing:-.6px;margin-top:7px}
+.hp-lists{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid var(--border)}
+.hp-lists .geography+.geography{border-left:1px solid var(--border)}
+.hp-lists .geography .panel-title{padding:16px 20px 8px}
+.hp-lists .country-row{grid-template-columns:22px minmax(0,1.4fr) minmax(40px,1fr) 44px;gap:10px;padding:6px 20px}
+.hp-lists code{font-size:11px;color:#d3e3ef;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hp-waiting{border-top:1px solid var(--border);margin:0}
+.hp-note{padding:12px 22px 16px}
+@media(max-width:1300px){.hp-lists{grid-template-columns:repeat(2,minmax(0,1fr))}.hp-lists .geography:nth-child(3){border-left:0}.hp-lists .geography:nth-child(n+3){border-top:1px solid var(--border)}}
+@media(max-width:640px){
+  .honeypot{border-radius:12px}
+  .honeypot>.panel-title{padding:16px 16px 10px;flex-wrap:wrap}
+  .hp-stats{grid-template-columns:1fr 1fr;gap:8px;padding:0 16px 14px}
+  .hp-stats div{padding:11px 13px}.hp-stats strong{font-size:22px}
+  .hp-lists{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
+  .hp-lists::-webkit-scrollbar{display:none}
+  .hp-lists .geography{flex:0 0 86%;scroll-snap-align:start;border-top:0!important;border-left:0!important;border-right:1px solid var(--border)}
+  .hp-lists .country-row{padding:6px 16px}
+  .hp-note{padding:10px 16px 14px}
+}

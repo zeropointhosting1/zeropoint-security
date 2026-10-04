@@ -1,6 +1,7 @@
 import type {
   DdosFlow,
   FeedStatus,
+  HoneypotStats,
   LiveAlert,
   RansomwareVictim,
   Threat,
@@ -56,6 +57,8 @@ const FEEDS = {
   nvd: "https://services.nvd.nist.gov/rest/json/cves/2.0",
   // Optional: real DDoS origin→target flows. Needs a free Cloudflare token with Radar read access.
   radar: "https://api.cloudflare.com/client/v4/radar/attacks",
+  // Zeropoint's own Cowrie honeypot on the OVH VPS; stats.json is rebuilt every 5 minutes.
+  honeypot: "https://hp.zeropointhosting.com/stats.json",
   // Fallback only, if the local DB-IP database is unavailable. Free tier: 15 batches/minute.
   ipApi: "http://ip-api.com/batch?fields=status,query,country,countryCode,city,lat,lon",
 };
@@ -548,6 +551,32 @@ async function fetchOpenPhish(): Promise<number> {
   return (await getText(FEEDS.openphish)).split("\n").filter((l) => l.startsWith("http")).length;
 }
 
+/** Usernames, passwords and commands are typed by attackers: keep them short and printable. */
+function cleanPairs(v: unknown): [string, number][] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((p): p is [unknown, unknown] => Array.isArray(p) && p.length === 2)
+    .map(([k, n]): [string, number] => [String(k ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, 120), Number(n)])
+    .filter(([, n]) => Number.isFinite(n) && n > 0)
+    .slice(0, 10);
+}
+
+async function fetchHoneypot(): Promise<HoneypotStats> {
+  const d = await getJson<Record<string, unknown>>(FEEDS.honeypot);
+  const num = (k: string) => (Number.isFinite(Number(d[k])) ? Number(d[k]) : 0);
+  return {
+    sessions: num("sessions"),
+    uniqueIps: num("unique_ips"),
+    failed: num("failed"),
+    success: num("success"),
+    topUsers: cleanPairs(d.top_users),
+    topPasswords: cleanPairs(d.top_passwords),
+    topCommands: cleanPairs(d.top_commands),
+    topIps: cleanPairs(d.top_ips),
+    updated: typeof d.updated === "string" ? d.updated : "",
+  };
+}
+
 // ---------------------------------------------------------------- geolocation fallback
 
 async function geolocateViaIpApi(ips: string[]): Promise<void> {
@@ -594,7 +623,7 @@ async function build(): Promise<ThreatPayload> {
   const sources: FeedStatus[] = [];
 
   const radarToken = process.env.CLOUDFLARE_API_TOKEN?.trim();
-  const [ipResults, kev, ransomware, topPorts, bazaar, nvd, phish, reader, ddosFlows] = await Promise.all([
+  const [ipResults, kev, ransomware, topPorts, bazaar, nvd, phish, reader, ddosFlows, honeypot] = await Promise.all([
     Promise.all(IP_FEEDS.map((f) => settle(f.run()))),
     settle(fetchKev()),
     settle(fetchRansomware()),
@@ -604,6 +633,7 @@ async function build(): Promise<ThreatPayload> {
     settle(fetchOpenPhish()),
     getGeoReader(),
     radarToken ? settle(fetchDdosFlows(radarToken)) : Promise.resolve(null),
+    settle(fetchHoneypot()),
   ]);
 
   // Merge every IP feed: one record per IP, keeping the most severe classification
@@ -795,6 +825,7 @@ async function build(): Promise<ThreatPayload> {
     ["MalwareBazaar", "https://bazaar.abuse.ch/", bazaar, bazaar.ok ? bazaar.v.count : 0],
     ["NVD", "https://nvd.nist.gov/", nvd, nvd.ok ? nvd.v : 0],
     ["OpenPhish", "https://openphish.com/", phish, phish.ok ? phish.v : 0],
+    ["Zeropoint honeypot", FEEDS.honeypot, honeypot, honeypot.ok ? honeypot.v.sessions : 0],
   ];
   if (ddosFlows) {
     extra.push(["Cloudflare Radar", "https://radar.cloudflare.com/security/network-layer", ddosFlows, ddosFlows.ok ? ddosFlows.v.length : 0]);
@@ -811,6 +842,7 @@ async function build(): Promise<ThreatPayload> {
 
   return {
     sources,
+    honeypot: honeypot.ok ? honeypot.v : null,
     threats,
     ransomware: ransomware.ok ? ransomware.v : [],
     alerts: alerts.slice(0, ALERT_LIMIT),
