@@ -1,7 +1,7 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { LiveAlert, Threat, ThreatKind, ThreatPayload } from "@/lib/types";
+import type { DdosFlow, HoneypotArc, LiveAlert, RansomwareVictim, Threat, ThreatKind, ThreatPayload } from "@/lib/types";
 import { KIND_LABEL, alertColor, alertLabel, compact, timeAgo } from "@/lib/format";
 import { useLiveStream } from "./useLiveStream";
 import EventDetail from "./EventDetail";
@@ -13,6 +13,11 @@ const GlobeView = dynamic(() => import("./GlobeView"), {
 });
 
 const EMPTY: Threat[] = [];
+// Stable empty lists: a fresh [] on every render makes the globe rebuild its layers,
+// which restarts the arc animations (visible as flicker).
+const NO_VICTIMS: RansomwareVictim[] = [];
+const NO_FLOWS: DdosFlow[] = [];
+const NO_HP_ARCS: HoneypotArc[] = [];
 /** Warn when the collector has not uploaded fresh data for this long. */
 const STALE_MS = 30 * 60_000;
 /** Rendering tens of thousands of cards would freeze the page; search narrows the rest. */
@@ -85,14 +90,14 @@ export default function Dashboard() {
     );
   }, [threats, filter, query]);
 
-  const victims = data?.ransomware ?? [];
+  const victims = data?.ransomware ?? NO_VICTIMS;
   const totals = data?.totals;
   const sources = data?.sources ?? [];
   const online = sources.filter((s) => s.status === "online").length;
   const topCountries = data?.topCountries ?? [];
   const topPorts = data?.topPorts ?? [];
   const topMalware = data?.topMalware ?? [];
-  const ddosFlows = data?.ddosFlows ?? [];
+  const ddosFlows = data?.ddosFlows ?? NO_FLOWS;
   const ddosFamilies = data?.ddosFamilies ?? [];
   const hp = data?.honeypot;
   const showFlows = filter === "all" || filter === "ddos";
@@ -210,10 +215,10 @@ export default function Dashboard() {
           <div className="map-stage">
             <GlobeView
               threats={visible}
-              victims={filter === "all" || filter === "ransomware" ? victims : []}
+              victims={filter === "all" || filter === "ransomware" ? victims : NO_VICTIMS}
               beacons={beacons}
-              flows={showFlows ? ddosFlows : []}
-              honeypotArcs={hp && (filter === "all" || filter === "scanner") ? hp.arcs : []}
+              flows={showFlows ? ddosFlows : NO_FLOWS}
+              honeypotArcs={hp && (filter === "all" || filter === "scanner") ? hp.arcs : NO_HP_ARCS}
               sensor={hp?.sensor ?? null}
               follow={pinned ?? (followLive && live.latest && inScope(filter, live.latest.kind) ? live.latest : null)}
               selected={selected}
