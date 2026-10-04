@@ -572,7 +572,8 @@ export default function Dashboard() {
         <span>
           Public threat intelligence, refreshed every 5 minutes. Indicators are source reports, not attacks against your
           network. IP locations are approximate (IP geolocation by <a href="https://db-ip.com" target="_blank" rel="noreferrer">DB-IP</a>);
-          ransomware victims are placed at country level.
+          ransomware victims are placed at country level. Our honeypot records connection attempts to a decoy server for
+          network defense; attacker IP addresses are used only to estimate location and are never published.
         </span>
       </footer>
     </main>
