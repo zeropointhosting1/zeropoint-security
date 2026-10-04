@@ -10,7 +10,12 @@ import collections, datetime, glob, json, os
 LOG_GLOB = os.environ.get("COWRIE_LOGS", "/opt/cowrie/var/log/cowrie/cowrie.json*")
 PUBLIC_OUT = os.environ.get("PUBLIC_OUT", "/var/www/honeypot/stats.json")
 PRIVATE_OUT = os.environ.get("PRIVATE_OUT", "/var/www/honeypot-private/attackers.json")
-IGNORE = {"99.45.225.204"}  # our own tests (home IP)
+# IPs to leave out (your own tests): one per line in this file, kept only on the VPS.
+IGNORE_FILE = os.environ.get("IGNORE_FILE", "/opt/cowrie/ignore-ips.txt")
+try:
+    IGNORE = {l.split("#")[0].strip() for l in open(IGNORE_FILE)} - {""}
+except FileNotFoundError:
+    IGNORE = set()
 
 c = collections.Counter
 users, pwds, cmds, ips = c(), c(), c(), c()
