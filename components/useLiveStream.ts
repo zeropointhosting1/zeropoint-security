@@ -53,9 +53,12 @@ export function useLiveStream() {
     };
     poll();
     const id = setInterval(poll, POLL_MS);
+    const onVisible = () => !document.hidden && poll();
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
       clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, []);
 
@@ -76,6 +79,7 @@ export function useLiveStream() {
             lon: a.lon,
             color: alertColor(a.kind),
             kind: a.kind,
+            countryCode: a.countryCode,
             label: `${alertLabel(a.kind)} · ${a.countryCode ?? ""}`,
           };
           setBeacons((prev) => [...prev, b].slice(-MAX_BEACONS));

@@ -73,9 +73,18 @@ export default function Dashboard() {
     load();
     const id = setInterval(load, 300000);
     const clock = setInterval(() => tick((n) => n + 1), 10000);
+    // Browsers pause timers in background tabs and on locked phones: refresh on return.
+    const onVisible = () => {
+      if (!document.hidden) {
+        load();
+        tick((n) => n + 1);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       clearInterval(id);
       clearInterval(clock);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [load]);
 
