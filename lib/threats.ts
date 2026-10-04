@@ -9,6 +9,7 @@ import type {
   ThreatPayload,
   Vulnerability,
 } from "./types";
+import { lookup as resolveHost } from "node:dns/promises";
 import { getGeoReader, geoipError, lookup, type Geo } from "./geoip";
 import centroids from "./country-centroids.json";
 
@@ -62,6 +63,9 @@ const FEEDS = {
   // Fallback only, if the local DB-IP database is unavailable. Free tier: 15 batches/minute.
   ipApi: "http://ip-api.com/batch?fields=status,query,country,countryCode,city,lat,lon",
 };
+
+/** Source name of the Cowrie honeypot Zeropoint runs itself. */
+const HONEYPOT = "Zeropoint honeypot";
 
 let cached: { at: number; data: ThreatPayload } | null = null;
 let inflight: Promise<ThreatPayload> | null = null;
@@ -388,6 +392,7 @@ const IP_FEEDS: Array<{ name: string; url: string; run: () => Promise<RawThreat[
   },
   { name: "IPsum", url: "https://github.com/stamparm/ipsum", run: fetchIpsum },
   { name: "Spamhaus DROP", url: "https://www.spamhaus.org/drop/", run: fetchSpamhausDrop },
+  { name: HONEYPOT, url: "https://hp.zeropointhosting.com/stats.json", run: fetchHoneypotAttackers },
 ];
 
 // ---------------------------------------------------------------- other intel
@@ -561,8 +566,41 @@ function cleanPairs(v: unknown): [string, number][] {
     .slice(0, 10);
 }
 
+let honeypotRequest: { at: number; data: Promise<Record<string, unknown>> } | null = null;
+
+/** One download per refresh, shared by the stats panel and the attacker indicators. */
+function loadHoneypot(): Promise<Record<string, unknown>> {
+  if (!honeypotRequest || Date.now() - honeypotRequest.at > 60_000) {
+    honeypotRequest = { at: Date.now(), data: getJson<Record<string, unknown>>(FEEDS.honeypot) };
+  }
+  return honeypotRequest.data;
+}
+
+/** Every IP that connected to the honeypot recently, as an attacker indicator. */
+async function fetchHoneypotAttackers(): Promise<RawThreat[]> {
+  const d = await loadHoneypot();
+  if (!Array.isArray(d.attackers)) return [];
+  const out: RawThreat[] = [];
+  for (const a of d.attackers as Array<Record<string, unknown>>) {
+    const ip = typeof a?.ip === "string" ? a.ip.trim() : "";
+    const last = typeof a?.last === "string" && !Number.isNaN(Date.parse(a.last)) ? new Date(a.last).toISOString() : "";
+    if (!IPV4.test(ip)) continue;
+    out.push({
+      id: `${HONEYPOT}-${ip}`,
+      ip,
+      kind: "scanner",
+      reports: Number.isFinite(Number(a.sessions)) ? Number(a.sessions) : 1,
+      lastSeen: last,
+      source: HONEYPOT,
+      activity: "SSH/Telnet attack on Zeropoint honeypot",
+      alertTime: last || undefined,
+    });
+  }
+  return out;
+}
+
 async function fetchHoneypot(): Promise<HoneypotStats> {
-  const d = await getJson<Record<string, unknown>>(FEEDS.honeypot);
+  const d = await loadHoneypot();
   const num = (k: string) => (Number.isFinite(Number(d[k])) ? Number(d[k]) : 0);
   return {
     sessions: num("sessions"),
@@ -574,6 +612,9 @@ async function fetchHoneypot(): Promise<HoneypotStats> {
     topCommands: cleanPairs(d.top_commands),
     topIps: cleanPairs(d.top_ips),
     updated: typeof d.updated === "string" ? d.updated : "",
+    // Filled in by build() once geolocation is ready.
+    sensor: null,
+    arcs: [],
   };
 }
 
@@ -702,7 +743,7 @@ async function build(): Promise<ThreatPayload> {
         id: `al-${t.id}`,
         time: t.alertTime!,
         kind: t.kind,
-        title: `${family} · ${t.activity ?? t.kind}`,
+        title: t.source === HONEYPOT ? "Honeypot hit · SSH/Telnet attack" : `${family} · ${t.activity ?? t.kind}`,
         detail: `${t.ip}${t.port ? `:${t.port}` : ""} · ${g.city ? `${g.city}, ` : ""}${g.country}`,
         source: IP_FEEDS[i].name,
         country: g.country,
@@ -785,9 +826,28 @@ async function build(): Promise<ThreatPayload> {
     }
   }
 
+  // Honeypot attack lines: each recent attacker → the honeypot's own location.
+  if (honeypot.ok) {
+    try {
+      const { address } = await resolveHost(new URL(FEEDS.honeypot).hostname, { family: 4 });
+      const g = geo(address);
+      if (g) honeypot.v.sensor = { lat: g.lat, lon: g.lon, city: g.city, country: g.country };
+    } catch (e) {
+      errors.push(`Honeypot location: ${errorText(e)}`);
+    }
+    if (honeypot.v.sensor) {
+      honeypot.v.arcs = all
+        .filter((t) => t.feeds.includes(HONEYPOT))
+        .sort((a, b) => b.lastSeen.localeCompare(a.lastSeen))
+        .slice(0, 150)
+        .map((t) => ({ ip: t.ip, lat: t.lat, lon: t.lon, city: t.city, country: t.country, sessions: t.reports, lastSeen: t.lastSeen }));
+    }
+  }
+
   const ranked = [...all].sort(
     (a, b) =>
       KIND_RANK[a.kind] - KIND_RANK[b.kind] ||
+      Number(b.feeds.includes(HONEYPOT)) - Number(a.feeds.includes(HONEYPOT)) ||
       b.feeds.length - a.feeds.length ||
       b.reports - a.reports ||
       b.lastSeen.localeCompare(a.lastSeen),
@@ -825,7 +885,6 @@ async function build(): Promise<ThreatPayload> {
     ["MalwareBazaar", "https://bazaar.abuse.ch/", bazaar, bazaar.ok ? bazaar.v.count : 0],
     ["NVD", "https://nvd.nist.gov/", nvd, nvd.ok ? nvd.v : 0],
     ["OpenPhish", "https://openphish.com/", phish, phish.ok ? phish.v : 0],
-    ["Zeropoint honeypot", FEEDS.honeypot, honeypot, honeypot.ok ? honeypot.v.sessions : 0],
   ];
   if (ddosFlows) {
     extra.push(["Cloudflare Radar", "https://radar.cloudflare.com/security/network-layer", ddosFlows, ddosFlows.ok ? ddosFlows.v.length : 0]);

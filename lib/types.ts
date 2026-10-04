@@ -125,6 +125,20 @@ export interface HoneypotStats {
   /** Attacker IPs with the last two octets masked by the honeypot. */
   topIps: [string, number][];
   updated: string;
+  /** Where the honeypot itself is (geolocated from its own IP). */
+  sensor: { lat: number; lon: number; city: string; country: string } | null;
+  /** Most recent attackers, drawn as lines to the sensor. */
+  arcs: HoneypotArc[];
+}
+
+export interface HoneypotArc {
+  ip: string;
+  lat: number;
+  lon: number;
+  city: string;
+  country: string;
+  sessions: number;
+  lastSeen: string;
 }
 
 export interface ThreatPayload {

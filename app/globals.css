@@ -241,3 +241,4 @@ footer{align-items:center}
   .hp-lists .country-row{padding:6px 16px}
   .hp-note{padding:10px 16px 14px}
 }
+.map-legend i.mint{background:var(--mint);box-shadow:0 0 8px #5ef0c080}

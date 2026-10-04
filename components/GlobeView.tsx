@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Globe, { type GlobeMethods } from "react-globe.gl";
-import type { DdosFlow, LiveAlert, RansomwareVictim, Threat } from "@/lib/types";
+import type { DdosFlow, HoneypotArc, HoneypotStats, LiveAlert, RansomwareVictim, Threat } from "@/lib/types";
 import { KIND_COLOR, KIND_LABEL, VICTIM_COLOR, escapeHtml } from "@/lib/format";
 
 const TEXTURES = "https://unpkg.com/three-globe@2.45.0/example/img";
 const DDOS_COLOR = KIND_COLOR.ddos;
+const HONEYPOT_COLOR = "#5ef0c0";
 
 /** A live alert that has just fired at a real location. */
 export interface Beacon {
@@ -25,12 +26,20 @@ interface Props {
   victims: RansomwareVictim[];
   beacons: Beacon[];
   flows: DdosFlow[];
+  /** Zeropoint honeypot: attacker → sensor lines. */
+  honeypotArcs: HoneypotArc[];
+  sensor: HoneypotStats["sensor"];
   /** Fly to this beacon (follow-live mode). */
   follow: Beacon | null;
   selected: Threat | null;
   onSelect: (threat: Threat) => void;
   rotating: boolean;
 }
+
+/** DDoS flows and honeypot attacks share the arc layer. */
+type Arc =
+  | ({ type: "ddos" } & DdosFlow)
+  | ({ type: "honeypot"; targetLat: number; targetLon: number; target: string } & HoneypotArc);
 
 interface Ring {
   lat: number;
@@ -53,7 +62,7 @@ function beaconElement(b: Beacon): HTMLElement {
   return el;
 }
 
-export default function GlobeView({ threats, victims, beacons, flows, follow, selected, onSelect, rotating }: Props) {
+export default function GlobeView({ threats, victims, beacons, flows, honeypotArcs, sensor, follow, selected, onSelect, rotating }: Props) {
   const globeRef = useRef<GlobeMethods | undefined>(undefined);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 800 });
@@ -101,6 +110,21 @@ export default function GlobeView({ threats, victims, beacons, flows, follow, se
     [threats],
   );
   const maxShare = useMemo(() => flows.reduce((m, f) => Math.max(m, f.share), 1), [flows]);
+  const arcs = useMemo<Arc[]>(
+    () => [
+      ...flows.map((f) => ({ type: "ddos" as const, ...f })),
+      ...(sensor
+        ? honeypotArcs.map((a) => ({
+            type: "honeypot" as const,
+            ...a,
+            targetLat: sensor.lat,
+            targetLon: sensor.lon,
+            target: [sensor.city, sensor.country].filter(Boolean).join(", "),
+          }))
+        : []),
+    ],
+    [flows, honeypotArcs, sensor],
+  );
 
   // Live beacons get a fast shockwave, ransomware victims a slow pulse,
   // and the selected indicator a strong ring.
@@ -108,8 +132,10 @@ export default function GlobeView({ threats, victims, beacons, flows, follow, se
     const r: Ring[] = victims.map((v) => ({ lat: v.lat, lon: v.lon, color: VICTIM_COLOR, maxR: 2.2, period: 2200, speed: 2 }));
     for (const b of beacons) r.push({ lat: b.lat, lon: b.lon, color: b.color, maxR: 6, period: 900, speed: 5 });
     if (selected) r.push({ lat: selected.lat, lon: selected.lon, color: KIND_COLOR[selected.kind], maxR: 3.5, period: 700, speed: 3 });
+    // The honeypot itself: a steady mint pulse where the attack lines land.
+    if (sensor && honeypotArcs.length) r.push({ lat: sensor.lat, lon: sensor.lon, color: HONEYPOT_COLOR, maxR: 4, period: 1400, speed: 2.5 });
     return r;
-  }, [victims, beacons, selected]);
+  }, [victims, beacons, selected, sensor, honeypotArcs.length]);
 
   return (
     <div ref={wrapRef} className="globe-wrap">
@@ -183,24 +209,42 @@ export default function GlobeView({ threats, victims, beacons, flows, follow, se
           el.style.opacity = visible ? "1" : "0";
         }}
         htmlTransitionDuration={0}
-        // Real DDoS attack flows (Cloudflare Radar), thickness = share of attacks
-        arcsData={flows}
-        arcStartLat={(d) => (d as DdosFlow).originLat}
-        arcStartLng={(d) => (d as DdosFlow).originLon}
-        arcEndLat={(d) => (d as DdosFlow).targetLat}
-        arcEndLng={(d) => (d as DdosFlow).targetLon}
-        arcColor={() => [`${DDOS_COLOR}22`, DDOS_COLOR]}
-        arcStroke={(d) => 0.25 + 1.2 * ((d as DdosFlow).share / maxShare)}
+        // Real DDoS attack flows (Cloudflare Radar), thickness = share of attacks,
+        // plus attacks on the Zeropoint honeypot (attacker → sensor)
+        arcsData={arcs}
+        arcStartLat={(d) => (d as Arc).type === "ddos" ? (d as DdosFlow).originLat : (d as HoneypotArc).lat}
+        arcStartLng={(d) => (d as Arc).type === "ddos" ? (d as DdosFlow).originLon : (d as HoneypotArc).lon}
+        arcEndLat={(d) => (d as Arc).targetLat}
+        arcEndLng={(d) => (d as Arc).targetLon}
+        arcColor={(d: object) => {
+          const c = (d as Arc).type === "ddos" ? DDOS_COLOR : HONEYPOT_COLOR;
+          return [`${c}22`, c];
+        }}
+        arcStroke={(d) => {
+          const a = d as Arc;
+          return a.type === "ddos" ? 0.25 + 1.2 * (a.share / maxShare) : 0.3;
+        }}
         arcDashLength={0.35}
         arcDashGap={0.65}
-        arcDashAnimateTime={(d) => ((d as DdosFlow).layer === "L7" ? 2600 : 1800)}
+        arcDashAnimateTime={(d) => {
+          const a = d as Arc;
+          return a.type === "honeypot" ? 2200 : a.layer === "L7" ? 2600 : 1800;
+        }}
         arcAltitudeAutoScale={0.35}
         arcLabel={(d) => {
-          const f = d as DdosFlow;
+          const a = d as Arc;
+          if (a.type === "honeypot") {
+            return `<div class="globe-tip">
+            <b style="color:${HONEYPOT_COLOR}">Attack on Zeropoint honeypot</b><br/>
+            <code>${escapeHtml(a.ip)}</code><br/>
+            ${escapeHtml([a.city, a.country].filter(Boolean).join(", "))} → ${escapeHtml(a.target)}<br/>
+            ${a.sessions.toLocaleString()} session${a.sessions === 1 ? "" : "s"}
+          </div>`;
+          }
           return `<div class="globe-tip">
-            <b style="color:${DDOS_COLOR}">DDoS · ${f.layer === "L3" ? "network layer" : "application layer"}</b><br/>
-            ${escapeHtml(f.origin)} → ${escapeHtml(f.target)}<br/>
-            ${f.share.toFixed(1)}% of ${f.layer} attacks · last 24h
+            <b style="color:${DDOS_COLOR}">DDoS · ${a.layer === "L3" ? "network layer" : "application layer"}</b><br/>
+            ${escapeHtml(a.origin)} → ${escapeHtml(a.target)}<br/>
+            ${a.share.toFixed(1)}% of ${a.layer} attacks · last 24h
           </div>`;
         }}
       />

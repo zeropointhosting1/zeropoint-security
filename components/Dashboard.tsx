@@ -213,6 +213,8 @@ export default function Dashboard() {
               victims={filter === "all" || filter === "ransomware" ? victims : []}
               beacons={beacons}
               flows={showFlows ? ddosFlows : []}
+              honeypotArcs={hp && (filter === "all" || filter === "scanner") ? hp.arcs : []}
+              sensor={hp?.sensor ?? null}
               follow={pinned ?? (followLive && live.latest && inScope(filter, live.latest.kind) ? live.latest : null)}
               selected={selected}
               onSelect={focus}
@@ -232,6 +234,7 @@ export default function Dashboard() {
               <span><i className="amber" /> Attacker</span>
               <span><i className="blue" /> Blocklisted</span>
               <span><i className="yellow" /> Ransomware victim</span>
+              {!!hp?.arcs.length && <span><i className="mint" /> Honeypot attack</span>}
               <span><i className="beacon-dot" /> Live beacon</span>
               <small>Drag to explore · Scroll to zoom · Select a signal</small>
             </div>
