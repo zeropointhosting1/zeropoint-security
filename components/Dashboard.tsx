@@ -23,7 +23,7 @@ const STALE_MS = 30 * 60_000;
 /** Rendering tens of thousands of cards would freeze the page; search narrows the rest. */
 const LIST_LIMIT = 200;
 /** One filter drives the globe, live alerts, beacons and the indicator list. */
-type Scope = "all" | ThreatKind | "ransomware";
+type Scope = "all" | ThreatKind | "ransomware" | "honeypot";
 const FILTERS: Array<[Scope, string]> = [
   ["all", "Everything"],
   ["ddos", "DDoS"],
@@ -32,6 +32,7 @@ const FILTERS: Array<[Scope, string]> = [
   ["ransomware", "Ransomware"],
   ["scanner", "Attackers"],
   ["reputation", "Blocklisted"],
+  ["honeypot", "Honeypot"],
 ];
 const inScope = (scope: Scope, kind: LiveAlert["kind"]) => scope === "all" || kind === scope;
 const PENDING_SOURCES = ["DShield", "ThreatFox", "URLhaus", "IPsum", "CINS Army", "blocklist.de", "Ransomware.live", "CISA KEV"];
@@ -102,6 +103,9 @@ export default function Dashboard() {
   const hp = data?.honeypot;
   const showFlows = filter === "all" || filter === "ddos";
   const stream = useMemo(() => live.stream.filter((a) => inScope(filter, a.kind)), [live.stream, filter]);
+  // The Honeypot filter shows the full session log at once instead of the paced live stream.
+  const honeypotView = filter === "honeypot";
+  const liveList = honeypotView && hp?.log.length ? hp.log : stream;
   const indicatorByIp = useMemo(() => new Map(threats.map((t) => [t.ip, t])), [threats]);
 
   // An event being inspected gets a pinned beacon and the camera flies to it.
@@ -115,6 +119,7 @@ export default function Dashboard() {
             color: alertColor(openEvent.kind),
             label: `${alertLabel(openEvent.kind)} · ${openEvent.countryCode ?? ""}`,
             kind: openEvent.kind,
+            countryCode: openEvent.countryCode,
             pinned: true,
           }
         : null,
@@ -202,7 +207,7 @@ export default function Dashboard() {
           <div className="map-toolbar">
             <div className="scope" role="group" aria-label="Show">
               {FILTERS.map(([key, label]) => (
-                <button key={key} aria-pressed={filter === key} className={`scope-${key} ${filter === key ? "active" : ""}`} onClick={() => setFilter(key)}>
+                <button key={key} aria-pressed={filter === key} className={`scope-${key} ${filter === key ? "active" : ""}`} onClick={() => { setFilter(key); if (key === "honeypot") setTab("live"); }}>
                   {label}
                 </button>
               ))}
@@ -218,7 +223,7 @@ export default function Dashboard() {
               victims={filter === "all" || filter === "ransomware" ? victims : NO_VICTIMS}
               beacons={beacons}
               flows={showFlows ? ddosFlows : NO_FLOWS}
-              honeypotArcs={hp && (filter === "all" || filter === "scanner") ? hp.arcs : NO_HP_ARCS}
+              honeypotArcs={hp && (filter === "all" || filter === "honeypot") ? hp.arcs : NO_HP_ARCS}
               sensor={hp?.sensor ?? null}
               follow={pinned ?? (followLive && live.latest && inScope(filter, live.latest.kind) ? live.latest : null)}
               selected={selected}
@@ -272,7 +277,7 @@ export default function Dashboard() {
           <div className="panel-title">
             <div>
               <span className="eyebrow">INVESTIGATION QUEUE</span>
-              <h3>Intelligence alerts <span className="count">{tab === "live" ? stream.length : tab === "indicators" ? visible.length.toLocaleString() : tab === "ransomware" ? victims.length : data?.kev.length ?? 0}</span></h3>
+              <h3>Intelligence alerts <span className="count">{tab === "live" ? liveList.length : tab === "indicators" ? visible.length.toLocaleString() : tab === "ransomware" ? victims.length : data?.kev.length ?? 0}</span></h3>
             </div>
             <span className="signal-icon">⌁</span>
           </div>
@@ -286,11 +291,12 @@ export default function Dashboard() {
           {tab === "live" && (
             <>
               <p className="queue-note">
-                Real reports streaming in the order feeds published them · source timestamps · feeds publish every few minutes
-                {live.pending > 0 ? ` · ${live.pending} queued` : ""}
+                {honeypotView
+                  ? "Every session on the Zeropoint honeypot, newest first · shown by location, attacker IPs are never published · updates every 5 minutes"
+                  : <>Real reports streaming in the order feeds published them · source timestamps · feeds publish every few minutes{live.pending > 0 ? ` · ${live.pending} queued` : ""}</>}
               </p>
               <div className="alert-list">
-                {stream.map((a) => (
+                {liveList.map((a) => (
                   <button className={`alert-card live ${openEvent?.id === a.id ? "selected" : ""}`} key={a.id} style={{ ["--c" as string]: alertColor(a.kind) }} onClick={() => openAlert(a)}>
                     <div className="alert-top">
                       <span className="badge live">{alertLabel(a.kind).toUpperCase()}</span>
@@ -304,10 +310,14 @@ export default function Dashboard() {
                     </div>
                   </button>
                 ))}
-                {!stream.length && (
+                {!liveList.length && (
                   <div className="empty">
-                    <strong>{live.connected ? "Waiting for the next report..." : "Connecting to live feeds..."}</strong>
-                    <p>New C2 servers, DDoS bots, malware samples and ransomware claims appear here as they are published.</p>
+                    <strong>{honeypotView ? "No honeypot sessions yet" : live.connected ? "Waiting for the next report..." : "Connecting to live feeds..."}</strong>
+                    <p>
+                      {honeypotView
+                        ? "The honeypot is listening on SSH and Telnet. Each attack appears here with its location, protocol, credentials tried and commands run."
+                        : "New C2 servers, DDoS bots, malware samples and ransomware claims appear here as they are published."}
+                    </p>
                   </div>
                 )}
               </div>
@@ -350,13 +360,15 @@ export default function Dashboard() {
                 ))}
                 {!visible.length && (
                   <div className="empty">
-                    <strong>{loading ? "Collecting intelligence..." : filter === "ransomware" ? "Ransomware claims have no IP indicators" : "No matching indicators"}</strong>
+                    <strong>{loading ? "Collecting intelligence..." : filter === "ransomware" ? "Ransomware claims have no IP indicators" : honeypotView ? "Honeypot attackers are not listed by IP" : "No matching indicators"}</strong>
                     <p>
                       {loading
                         ? "Public feeds may take a moment to respond."
                         : filter === "ransomware"
                           ? "See the Ransomware and Live tabs for victim claims."
-                          : "Try another filter or refresh the feeds."}
+                          : honeypotView
+                            ? "Their IP addresses are never published. See the Live tab for the session log by location."
+                            : "Try another filter or refresh the feeds."}
                     </p>
                   </div>
                 )}

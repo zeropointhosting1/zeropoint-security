@@ -242,3 +242,15 @@ footer{align-items:center}
   .hp-note{padding:10px 16px 14px}
 }
 .map-legend i.mint{background:var(--mint);box-shadow:0 0 8px #5ef0c080}
+
+/* Compact live pulses; inspection keeps the taller beacon. */
+.beacon.compact .beacon-beam{display:none}
+.beacon.compact .beacon-core{left:-3px;top:-3px;width:6px;height:6px;box-shadow:0 0 0 2px var(--c),0 0 8px 2px var(--c)}
+.beacon.compact .beacon-label{left:10px;top:-12px;font-size:9px;background:#08121cd9}
+
+/* ---- Honeypot filter and session details ---- */
+.scope button.scope-honeypot.active{background:#123a30;color:#8ff5d3;border-color:#2c7a62}
+.ed-logins{list-style:none;margin:0;padding:0;display:grid;gap:5px}
+.ed-logins code{font-size:12px}
+.ed-ok{margin-left:8px;font:9px var(--font-mono),monospace;letter-spacing:.6px;text-transform:uppercase;color:#0b1a14;background:var(--mint);padding:2px 6px;border-radius:3px}
+.ed-cmds{margin:0;font:11px/1.6 var(--font-mono),monospace;color:#d3e3ef;background:#0a121a;border:1px solid #1f2d39;border-radius:6px;padding:10px 12px;white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto}

@@ -97,6 +97,25 @@ export default function EventDetail({ alert: a, indicator, onClose, onInspectInd
           {a.victim && <Row label="Claimed victim">{a.victim}</Row>}
           {a.sector && <Row label="Sector">{a.sector}</Row>}
           {a.domain && <Row label="Domain">{a.domain}</Row>}
+          {a.kind === "honeypot" && <Row label="Attacker IP">Withheld · never published</Row>}
+          {a.protocol && <Row label="Protocol">{a.protocol.toUpperCase()}</Row>}
+          {!!a.logins?.length && (
+            <Row label="Logins tried">
+              <ul className="ed-logins">
+                {a.logins.map(([user, pass, ok], i) => (
+                  <li key={i}>
+                    <code>{user || "(empty)"} / {pass || "(empty)"}</code>
+                    {ok && <span className="ed-ok">accepted · fake shell</span>}
+                  </li>
+                ))}
+              </ul>
+            </Row>
+          )}
+          {!!a.commands?.length && (
+            <Row label="Commands run">
+              <pre className="ed-cmds">{a.commands.join("\n")}</pre>
+            </Row>
+          )}
           {typeof a.lat === "number" && typeof a.lon === "number" && (
             <Row label="Coordinates">{a.lat.toFixed(3)}, {a.lon.toFixed(3)}{a.kind === "ransomware" ? " (country level)" : " (approximate)"}</Row>
           )}

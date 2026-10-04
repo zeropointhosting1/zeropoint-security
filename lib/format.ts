@@ -8,7 +8,8 @@ export const KIND_COLOR: Record<ThreatKind, string> = {
   ddos: "#ff7a1a",
 };
 export const VICTIM_COLOR = "#ffe14d";
-export const SAMPLE_COLOR = "#5ef0c0";
+export const SAMPLE_COLOR = "#b5e853";
+export const HONEYPOT_COLOR = "#5ef0c0";
 
 export const KIND_LABEL: Record<ThreatKind, string> = {
   scanner: "Attacking host",
@@ -21,12 +22,14 @@ export const KIND_LABEL: Record<ThreatKind, string> = {
 export function alertColor(kind: LiveAlert["kind"]): string {
   if (kind === "ransomware") return VICTIM_COLOR;
   if (kind === "sample") return SAMPLE_COLOR;
+  if (kind === "honeypot") return HONEYPOT_COLOR;
   return KIND_COLOR[kind];
 }
 
 export function alertLabel(kind: LiveAlert["kind"]): string {
   if (kind === "ransomware") return "Ransomware";
   if (kind === "sample") return "New sample";
+  if (kind === "honeypot") return "Honeypot hit";
   return KIND_LABEL[kind];
 }
 

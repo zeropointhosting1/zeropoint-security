@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Globe, { type GlobeMethods } from "react-globe.gl";
 import type { DdosFlow, HoneypotArc, HoneypotStats, LiveAlert, RansomwareVictim, Threat } from "@/lib/types";
-import { KIND_COLOR, KIND_LABEL, VICTIM_COLOR, escapeHtml } from "@/lib/format";
+import { HONEYPOT_COLOR, KIND_COLOR, KIND_LABEL, VICTIM_COLOR, escapeHtml } from "@/lib/format";
+
+import centroids from "@/lib/country-centroids.json";
 
 const TEXTURES = "https://unpkg.com/three-globe@2.45.0/example/img";
 const DDOS_COLOR = KIND_COLOR.ddos;
-const HONEYPOT_COLOR = "#5ef0c0";
 
 /** A live alert that has just fired at a real location. */
 export interface Beacon {
@@ -19,6 +20,7 @@ export interface Beacon {
   kind: LiveAlert["kind"];
   /** Pinned beacons (an event being inspected) stay lit instead of fading out. */
   pinned?: boolean;
+  countryCode?: string;
 }
 
 interface Props {
@@ -56,7 +58,7 @@ function fade(hex: string) {
 
 function beaconElement(b: Beacon): HTMLElement {
   const el = document.createElement("div");
-  el.className = b.pinned ? "beacon pinned" : "beacon";
+  el.className = b.pinned ? "beacon pinned" : "beacon compact";
   el.style.setProperty("--c", b.color);
   el.innerHTML = `<span class="beacon-beam"></span><span class="beacon-core"></span><span class="beacon-label">${escapeHtml(b.label)}</span>`;
   return el;
@@ -105,6 +107,46 @@ export default function GlobeView({ threats, victims, beacons, flows, honeypotAr
     if (follow && !selected) globeRef.current?.pointOfView({ lat: follow.lat, lng: follow.lon, altitude: 1.7 }, 1200);
   }, [follow, selected]);
 
+  // Country-only claims get one honest country marker, rather than scattered dots.
+  const victimClusters = useMemo(() => {
+    const groups = new Map<string, RansomwareVictim[]>();
+    for (const v of victims) {
+      const group = groups.get(v.countryCode) ?? [];
+      group.push(v);
+      groups.set(v.countryCode, group);
+    }
+    const table = centroids as unknown as Record<string, [number, number, string]>;
+    return Array.from(groups, ([cc, reports]) => ({
+      ...reports[0],
+      lat: table[cc]?.[0] ?? reports[0].lat,
+      lon: table[cc]?.[1] ?? reports[0].lon,
+      reports,
+    }));
+  }, [victims]);
+
+  const displayBeacons = useMemo(() => {
+    const groups: Array<{ beacon: Beacon; count: number }> = [];
+    for (const b of beacons) {
+      const group = !b.pinned && groups.find(({ beacon: other }) =>
+        !other.pinned && other.kind === b.kind && (
+          b.kind === "ransomware"
+            ? !!b.countryCode && b.countryCode === other.countryCode
+            : Math.abs(b.lat - other.lat) < 4 &&
+              Math.abs(((b.lon - other.lon + 540) % 360) - 180) < 4
+        ));
+      if (group) group.count++;
+      else {
+        const c = !b.pinned && b.kind === "ransomware" && b.countryCode
+          ? (centroids as unknown as Record<string, [number, number, string]>)[b.countryCode]
+          : undefined;
+        groups.push({ beacon: c ? { ...b, lat: c[0], lon: c[1] } : b, count: 1 });
+      }
+    }
+    return groups.map(({ beacon, count }) => count > 1
+      ? { ...beacon, label: `${beacon.label} · ${count} events` }
+      : beacon);
+  }, [beacons]);
+
   const maxReports = useMemo(
     () => threats.reduce((m, t) => Math.max(m, t.reports), 1),
     [threats],
@@ -129,13 +171,13 @@ export default function GlobeView({ threats, victims, beacons, flows, honeypotAr
   // Live beacons get a fast shockwave, ransomware victims a slow pulse,
   // and the selected indicator a strong ring.
   const rings = useMemo<Ring[]>(() => {
-    const r: Ring[] = victims.map((v) => ({ lat: v.lat, lon: v.lon, color: VICTIM_COLOR, maxR: 2.2, period: 2200, speed: 2 }));
-    for (const b of beacons) r.push({ lat: b.lat, lon: b.lon, color: b.color, maxR: 6, period: 900, speed: 5 });
+    const r: Ring[] = victimClusters.map((v) => ({ lat: v.lat, lon: v.lon, color: VICTIM_COLOR, maxR: 2.2, period: 2200, speed: 2 }));
+    for (const b of displayBeacons) r.push({ lat: b.lat, lon: b.lon, color: b.color, maxR: b.pinned ? 5 : 2.8, period: 1600, speed: 3 });
     if (selected) r.push({ lat: selected.lat, lon: selected.lon, color: KIND_COLOR[selected.kind], maxR: 3.5, period: 700, speed: 3 });
     // The honeypot itself: a steady mint pulse where the attack lines land.
     if (sensor && honeypotArcs.length) r.push({ lat: sensor.lat, lon: sensor.lon, color: HONEYPOT_COLOR, maxR: 4, period: 1400, speed: 2.5 });
     return r;
-  }, [victims, beacons, selected, sensor, honeypotArcs.length]);
+  }, [victimClusters, displayBeacons, selected, sensor, honeypotArcs.length]);
 
   return (
     <div ref={wrapRef} className="globe-wrap">
@@ -178,20 +220,25 @@ export default function GlobeView({ threats, victims, beacons, flows, honeypotAr
           </div>`;
         }}
         // Ransomware leak-site victims (at country level)
-        labelsData={victims}
+        labelsData={victimClusters}
         labelLat={(d) => (d as RansomwareVictim).lat}
         labelLng={(d) => (d as RansomwareVictim).lon}
-        labelText={() => ""}
+        labelText={(d) => {
+          const v = d as (typeof victimClusters)[number];
+          return `${v.countryCode} · ${v.reports.length}`;
+        }}
+        labelSize={0.75}
         labelDotRadius={0.45}
         labelColor={() => VICTIM_COLOR}
         labelAltitude={0.004}
         labelLabel={(d) => {
-          const v = d as RansomwareVictim;
+          const v = d as (typeof victimClusters)[number];
           return `<div class="globe-tip">
             <b style="color:${VICTIM_COLOR}">Ransomware victim claim</b><br/>
-            ${escapeHtml(v.victim)}<br/>
-            Group: ${escapeHtml(v.group)}<br/>
-            ${escapeHtml(v.country)} · ${escapeHtml(v.sector)}
+            ${escapeHtml(v.country)} · country-level location<br/>
+            ${escapeHtml(String(v.reports.length))} victim claims<br/>
+            ${v.reports.slice(0, 5).map((r) => `${escapeHtml(r.victim)} · ${escapeHtml(r.group)}`).join("<br/>")}
+            ${v.reports.length > 5 ? `<br/>+ ${v.reports.length - 5} more · see alert list` : ""}
           </div>`;
         }}
         ringsData={rings}
@@ -202,7 +249,7 @@ export default function GlobeView({ threats, victims, beacons, flows, honeypotAr
         ringPropagationSpeed={(d) => (d as Ring).speed}
         ringRepeatPeriod={(d) => (d as Ring).period}
         // Live alert beacons: beam of light + label, hidden when behind the globe
-        htmlElementsData={beacons}
+        htmlElementsData={displayBeacons}
         htmlLat={(d) => (d as Beacon).lat}
         htmlLng={(d) => (d as Beacon).lon}
         htmlAltitude={0}

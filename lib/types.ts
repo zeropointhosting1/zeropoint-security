@@ -64,7 +64,7 @@ export interface LiveAlert {
   id: string;
   /** ISO timestamp reported by the source. */
   time: string;
-  kind: ThreatKind | "ransomware" | "sample";
+  kind: ThreatKind | "ransomware" | "sample" | "honeypot";
   title: string;
   detail: string;
   source: string;
@@ -88,6 +88,11 @@ export interface LiveAlert {
   description?: string;
   /** The record's page at the source. */
   link?: string;
+  // Honeypot sessions (attacker-supplied text, sanitized by the collector)
+  protocol?: string;
+  /** [username, password, accepted] */
+  logins?: [string, string, boolean][];
+  commands?: string[];
 }
 
 /** Share of global DDoS attacks between two countries (Cloudflare Radar, last 24h). */
@@ -129,6 +134,8 @@ export interface HoneypotStats {
   sensor: { lat: number; lon: number; city: string; country: string } | null;
   /** Recent attacks grouped by city, drawn as lines to the sensor. No IPs. */
   arcs: HoneypotArc[];
+  /** Most recent sessions, newest first: location, protocol, credentials and commands. No IPs. */
+  log: LiveAlert[];
 }
 
 export interface HoneypotArc {

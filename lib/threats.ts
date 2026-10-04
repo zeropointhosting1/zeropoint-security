@@ -575,22 +575,54 @@ interface HoneypotAttacker {
   last: string;
 }
 
-/** Recent attacker IPs from the honeypot's private file. Used for geolocation only. */
-async function fetchHoneypotAttackers(): Promise<HoneypotAttacker[]> {
+interface HoneypotSession {
+  id: string;
+  ip: string;
+  start: string;
+  protocol: string;
+  logins: [string, string, boolean][];
+  commands: string[];
+}
+
+/** Attacker-typed text: printable, short. */
+function cleanText(v: unknown, max: number): string {
+  return String(v ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, max);
+}
+
+/**
+ * The honeypot's private file: recent attacker IPs and session details. IPs are used for
+ * geolocation only. Accepts the older format (a bare attackers array) too.
+ */
+async function fetchHoneypotPrivate(): Promise<{ attackers: HoneypotAttacker[]; sessions: HoneypotSession[] }> {
   const token = process.env.HONEYPOT_TOKEN?.trim();
-  if (!token) return [];
+  if (!token) return { attackers: [], sessions: [] };
   const d = await getJson<unknown>(FEEDS.honeypotAttackers, { headers: { Authorization: `Bearer ${token}` } });
-  if (!Array.isArray(d)) return [];
-  const out: HoneypotAttacker[] = [];
-  // stats.py writes at most 500; the cap keeps a tampered feed from flooding the collector.
-  for (const a of (d as Array<Record<string, unknown>>).slice(0, 500)) {
+  const rawAttackers = Array.isArray(d) ? d : Array.isArray((d as { attackers?: unknown })?.attackers) ? (d as { attackers: unknown[] }).attackers : [];
+  const rawSessions = !Array.isArray(d) && Array.isArray((d as { sessions?: unknown })?.sessions) ? (d as { sessions: unknown[] }).sessions : [];
+  const iso = (v: unknown) => (typeof v === "string" && !Number.isNaN(Date.parse(v)) ? new Date(v).toISOString() : "");
+
+  const attackers: HoneypotAttacker[] = [];
+  // stats.py writes at most 500 of each; the caps keep a tampered feed from flooding the collector.
+  for (const a of (rawAttackers as Array<Record<string, unknown>>).slice(0, 500)) {
     const ip = typeof a?.ip === "string" ? a.ip.trim() : "";
     if (!isPublicIPv4(ip)) continue;
-    const last = typeof a.last === "string" && !Number.isNaN(Date.parse(a.last)) ? new Date(a.last).toISOString() : "";
     const sessions = Number(a.sessions);
-    out.push({ ip, sessions: Number.isFinite(sessions) && sessions > 0 ? sessions : 1, last });
+    attackers.push({ ip, sessions: Number.isFinite(sessions) && sessions > 0 ? sessions : 1, last: iso(a.last) });
   }
-  return out;
+  const sessions: HoneypotSession[] = [];
+  for (const x of (rawSessions as Array<Record<string, unknown>>).slice(0, 500)) {
+    const ip = typeof x?.ip === "string" ? x.ip.trim() : "";
+    const start = iso(x?.start);
+    const id = cleanText(x?.id, 40).replace(/[^\w-]/g, "");
+    if (!isPublicIPv4(ip) || !start || !id) continue;
+    const logins = (Array.isArray(x.logins) ? x.logins : [])
+      .filter((l): l is unknown[] => Array.isArray(l))
+      .slice(0, 10)
+      .map((l): [string, string, boolean] => [cleanText(l[0], 64), cleanText(l[1], 64), l[2] === true]);
+    const commands = (Array.isArray(x.commands) ? x.commands : []).slice(0, 15).map((c) => cleanText(c, 160));
+    sessions.push({ id, ip, start, protocol: x.protocol === "telnet" ? "telnet" : "ssh", logins, commands });
+  }
+  return { attackers, sessions };
 }
 
 async function fetchHoneypot(): Promise<HoneypotStats> {
@@ -609,6 +641,7 @@ async function fetchHoneypot(): Promise<HoneypotStats> {
     topCountries: [],
     sensor: null,
     arcs: [],
+    log: [],
   };
 }
 
@@ -669,7 +702,7 @@ async function build(): Promise<ThreatPayload> {
     getGeoReader(),
     radarToken ? settle(fetchDdosFlows(radarToken)) : Promise.resolve(null),
     settle(fetchHoneypot()),
-    settle(fetchHoneypotAttackers()),
+    settle(fetchHoneypotPrivate()),
   ]);
 
   // Merge every IP feed: one record per IP, keeping the most severe classification
@@ -831,10 +864,10 @@ async function build(): Promise<ThreatPayload> {
     } catch (e) {
       errors.push(`Honeypot location: ${errorText(e)}`);
     }
-    if (!hpAttackers.ok) errors.push(`${HONEYPOT} attackers: ${errorText(hpAttackers.e)}`);
+    if (!hpAttackers.ok) errors.push(`${HONEYPOT} private feed: ${errorText(hpAttackers.e)}`);
     const places = new Map<string, HoneypotArc>();
     const countries = new Map<string, number>();
-    for (const a of hpAttackers.ok ? hpAttackers.v : []) {
+    for (const a of hpAttackers.ok ? hpAttackers.v.attackers : []) {
       const g = geo(a.ip);
       if (!g) continue;
       countries.set(g.country, (countries.get(g.country) ?? 0) + 1);
@@ -851,23 +884,59 @@ async function build(): Promise<ThreatPayload> {
     const recentFirst = [...places.values()].sort((a, b) => b.lastSeen.localeCompare(a.lastSeen));
     honeypot.v.topCountries = [...countries.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
     if (honeypot.v.sensor) honeypot.v.arcs = recentFirst.slice(0, 150);
-    for (const p of recentFirst) {
-      if (!recent(p.lastSeen)) break;
-      const where = p.city ? `${p.city}, ${p.country}` : p.country;
-      alerts.push({
-        id: `al-hp-${p.countryCode}-${p.city}-${p.lastSeen}`,
-        time: p.lastSeen,
-        kind: "scanner",
-        title: "Honeypot hit · SSH/Telnet attack",
-        detail: `${where} · ${p.attackers} attacker${p.attackers === 1 ? "" : "s"}`,
+    // Session log: one entry per attack, with location instead of the IP.
+    for (const x of hpAttackers.ok ? hpAttackers.v.sessions : []) {
+      const g = geo(x.ip);
+      const where = g ? (g.city ? `${g.city}, ${g.country}` : g.country) : "Unknown location";
+      const proto = x.protocol.toUpperCase();
+      const accepted = x.logins.some((l) => l[2]);
+      const title = x.commands.length
+        ? `Honeypot · attacker ran ${x.commands.length} command${x.commands.length === 1 ? "" : "s"}`
+        : accepted
+          ? "Honeypot · login accepted (fake shell)"
+          : x.logins.length
+            ? `Honeypot · ${x.logins.length} ${proto} login attempt${x.logins.length === 1 ? "" : "s"}`
+            : `Honeypot · ${proto} probe`;
+      const first = x.logins[0];
+      honeypot.v.log.push({
+        id: `al-hp-${x.id}`,
+        time: x.start,
+        kind: "honeypot",
+        title,
+        detail: `${where} · ${proto}${first ? ` · ${first[0] || "(empty)"} / ${first[1] || "(empty)"}` : ""}`,
         source: HONEYPOT,
-        country: p.country,
-        countryCode: p.countryCode,
-        city: p.city || undefined,
-        lat: p.lat,
-        lon: p.lon,
-        activity: "SSH/Telnet login attempts on the Zeropoint honeypot",
+        activity: `${proto} session on the Zeropoint honeypot`,
+        protocol: x.protocol,
+        logins: x.logins,
+        commands: x.commands,
+        ...(g ? { country: g.country, countryCode: g.countryCode, city: g.city || undefined, lat: g.lat, lon: g.lon } : {}),
       });
+    }
+    honeypot.v.log.sort((a, b) => b.time.localeCompare(a.time));
+    honeypot.v.log = honeypot.v.log.slice(0, 150);
+    if (honeypot.v.log.length) {
+      // Recent sessions stream into the live queue, capped so they don't crowd out other feeds.
+      alerts.push(...honeypot.v.log.filter((a) => recent(a.time)).slice(0, 60));
+    } else {
+      // Older private-file format (no sessions): one alert per city.
+      for (const p of recentFirst) {
+        if (!recent(p.lastSeen)) break;
+        const where = p.city ? `${p.city}, ${p.country}` : p.country;
+        alerts.push({
+          id: `al-hp-${p.countryCode}-${p.city}-${p.lastSeen}`,
+          time: p.lastSeen,
+          kind: "honeypot",
+          title: "Honeypot hit · SSH/Telnet attack",
+          detail: `${where} · ${p.attackers} attacker${p.attackers === 1 ? "" : "s"}`,
+          source: HONEYPOT,
+          country: p.country,
+          countryCode: p.countryCode,
+          city: p.city || undefined,
+          lat: p.lat,
+          lon: p.lon,
+          activity: "SSH/Telnet login attempts on the Zeropoint honeypot",
+        });
+      }
     }
     alerts.sort((a, b) => b.time.localeCompare(a.time));
   }
