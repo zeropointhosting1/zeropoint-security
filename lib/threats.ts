@@ -581,7 +581,8 @@ async function fetchHoneypotAttackers(): Promise<RawThreat[]> {
   const d = await loadHoneypot();
   if (!Array.isArray(d.attackers)) return [];
   const out: RawThreat[] = [];
-  for (const a of d.attackers as Array<Record<string, unknown>>) {
+  // stats.py sends at most 500; the cap keeps a tampered feed from flooding the collector.
+  for (const a of (d.attackers as Array<Record<string, unknown>>).slice(0, 500)) {
     const ip = typeof a?.ip === "string" ? a.ip.trim() : "";
     const last = typeof a?.last === "string" && !Number.isNaN(Date.parse(a.last)) ? new Date(a.last).toISOString() : "";
     if (!IPV4.test(ip)) continue;
