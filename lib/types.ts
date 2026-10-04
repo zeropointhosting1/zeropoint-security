@@ -122,21 +122,23 @@ export interface HoneypotStats {
   topUsers: [string, number][];
   topPasswords: [string, number][];
   topCommands: [string, number][];
-  /** Attacker IPs with the last two octets masked by the honeypot. */
-  topIps: [string, number][];
   updated: string;
+  /** Countries of recent attackers, by number of attacking IPs. */
+  topCountries: [string, number][];
   /** Where the honeypot itself is (geolocated from its own IP). */
   sensor: { lat: number; lon: number; city: string; country: string } | null;
-  /** Most recent attackers, drawn as lines to the sensor. */
+  /** Recent attacks grouped by city, drawn as lines to the sensor. No IPs. */
   arcs: HoneypotArc[];
 }
 
 export interface HoneypotArc {
-  ip: string;
   lat: number;
   lon: number;
   city: string;
   country: string;
+  countryCode: string;
+  /** Distinct attacking IPs from this place. */
+  attackers: number;
   sessions: number;
   lastSeen: string;
 }

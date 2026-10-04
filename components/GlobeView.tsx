@@ -236,9 +236,8 @@ export default function GlobeView({ threats, victims, beacons, flows, honeypotAr
           if (a.type === "honeypot") {
             return `<div class="globe-tip">
             <b style="color:${HONEYPOT_COLOR}">Attack on Zeropoint honeypot</b><br/>
-            <code>${escapeHtml(a.ip)}</code><br/>
             ${escapeHtml([a.city, a.country].filter(Boolean).join(", "))} → ${escapeHtml(a.target)}<br/>
-            ${a.sessions.toLocaleString()} session${a.sessions === 1 ? "" : "s"}
+            ${a.attackers.toLocaleString()} attacker${a.attackers === 1 ? "" : "s"} · ${a.sessions.toLocaleString()} session${a.sessions === 1 ? "" : "s"}
           </div>`;
           }
           return `<div class="globe-tip">

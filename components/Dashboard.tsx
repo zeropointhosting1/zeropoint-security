@@ -432,7 +432,7 @@ export default function Dashboard() {
                 ["Usernames tried", hp.topUsers],
                 ["Passwords tried", hp.topPasswords],
                 ["Commands run", hp.topCommands],
-                ["Attacker networks", hp.topIps],
+                ["Attacking countries", hp.topCountries],
               ] as const).map(([title, rows]) => (
                 <div className="geography" key={title}>
                   <div className="panel-title"><h3>{title}</h3></div>
@@ -455,7 +455,7 @@ export default function Dashboard() {
           )}
           <p className="hint hp-note">
             A decoy server that only Zeropoint runs: every number here is a real attack against it. &ldquo;Logins accepted&rdquo; land
-            in a fake shell. Attacker IPs are shown as networks (last two octets hidden).
+            in a fake shell. Attackers are shown by city and country only; their IP addresses are never published.
           </p>
         </section>
       )}
