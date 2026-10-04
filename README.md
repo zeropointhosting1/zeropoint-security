@@ -23,11 +23,11 @@ On first start the server downloads the free DB-IP city database (~60 MB compres
 In production, `wrangler.jsonc` deploys `worker/index.ts`, which serves `/api/threats` and `/api/alerts` from Supabase (`public.snapshots`). If Supabase is unreachable or empty, it falls back to the build snapshot. An Ubuntu VM keeps Supabase fresh by running `scripts/collect.ts --upload` every 5 minutes. The VM needs no inbound ports.
 
 1. Run `supabase/setup.sql` once in the Supabase SQL Editor, with `CHANGE_ME` replaced by a strong password. Never commit the password.
-2. On the VM, install Node 22, create a `zeropoint` system user, and clone the repo to `/opt/zeropoint/app`. Then run `sudo -u zeropoint bash -c 'cd /opt/zeropoint/app && npm ci'`.
+2. On the VM, install Node 22, create a `zeropoint` system user, and clone the repo to `/opt/zeropoint/app`. Then run `sudo -u zeropoint bash -c 'cd /opt/zeropoint/app && npm ci --ignore-scripts'`. `--ignore-scripts` stops dependencies from running install-time code; the collector does not need it.
 3. Create `/etc/zeropoint/collector.env` (root-owned, mode 600) with one line: `SUPABASE_DB_URL=postgresql://zeropoint_collector.<project-ref>:<password>@<session-pooler-host>:5432/postgres`. The user must be `zeropoint_collector`, never `postgres`.
 4. Copy `deploy/zeropoint-collector.{service,timer}` to `/etc/systemd/system/`, then run `systemctl daemon-reload`, `systemctl start zeropoint-collector` (a test run), and `systemctl enable --now zeropoint-collector.timer`.
 
-Check the logs with `journalctl -u zeropoint-collector`. To update the VM, run `sudo -u zeropoint bash -c 'cd /opt/zeropoint/app && git pull && npm ci'`. The GitHub Actions workflow in `.github/workflows/collect.yml` is a manual-only alternative.
+Check the logs with `journalctl -u zeropoint-collector`. To update the VM, run `sudo -u zeropoint bash -c 'cd /opt/zeropoint/app && git pull && npm ci --ignore-scripts'`. The GitHub Actions workflow in `.github/workflows/collect.yml` is a manual-only alternative.
 
 ### Optional: live DDoS attack flows
 

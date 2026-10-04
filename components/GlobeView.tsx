@@ -163,15 +163,17 @@ export default function GlobeView({ threats, victims, beacons, flows, honeypotAr
         pointResolution={6}
         pointsMerge={false}
         pointsTransitionDuration={0}
+        // Tooltips are HTML strings: every value from the payload goes through escapeHtml,
+        // numbers included, so a tampered payload cannot inject markup.
         pointLabel={(d) => {
           const t = d as Threat;
           return `<div class="globe-tip">
-            <b style="color:${KIND_COLOR[t.kind]}">${KIND_LABEL[t.kind]}</b><br/>
-            <code>${escapeHtml(t.ip)}${t.port ? `:${t.port}` : ""}</code><br/>
+            <b style="color:${KIND_COLOR[t.kind] ?? ""}">${escapeHtml(KIND_LABEL[t.kind] ?? "")}</b><br/>
+            <code>${escapeHtml(`${t.ip}${t.port ? `:${t.port}` : ""}`)}</code><br/>
             ${escapeHtml([t.city, t.country].filter(Boolean).join(", "))}<br/>
             ${t.malware ? `Malware: ${escapeHtml(t.malware)}<br/>` : ""}
             ${t.activity ? `${escapeHtml(t.activity)}<br/>` : ""}
-            ${t.kind === "scanner" && t.reports ? `Reports: ${t.reports.toLocaleString()}<br/>` : ""}
+            ${t.kind === "scanner" && t.reports ? `Reports: ${escapeHtml(t.reports.toLocaleString())}<br/>` : ""}
             Feeds: ${escapeHtml(t.feeds.join(", "))}
           </div>`;
         }}
@@ -237,13 +239,13 @@ export default function GlobeView({ threats, victims, beacons, flows, honeypotAr
             return `<div class="globe-tip">
             <b style="color:${HONEYPOT_COLOR}">Attack on Zeropoint honeypot</b><br/>
             ${escapeHtml([a.city, a.country].filter(Boolean).join(", "))} → ${escapeHtml(a.target)}<br/>
-            ${a.attackers.toLocaleString()} attacker${a.attackers === 1 ? "" : "s"} · ${a.sessions.toLocaleString()} session${a.sessions === 1 ? "" : "s"}
+            ${escapeHtml(`${a.attackers.toLocaleString()} attacker${a.attackers === 1 ? "" : "s"} · ${a.sessions.toLocaleString()} session${a.sessions === 1 ? "" : "s"}`)}
           </div>`;
           }
           return `<div class="globe-tip">
             <b style="color:${DDOS_COLOR}">DDoS · ${a.layer === "L3" ? "network layer" : "application layer"}</b><br/>
             ${escapeHtml(a.origin)} → ${escapeHtml(a.target)}<br/>
-            ${a.share.toFixed(1)}% of ${a.layer} attacks · last 24h
+            ${escapeHtml(`${Number(a.share).toFixed(1)}% of ${a.layer} attacks · last 24h`)}
           </div>`;
         }}
       />

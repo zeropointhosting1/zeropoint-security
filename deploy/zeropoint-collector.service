@@ -21,3 +21,12 @@ ProtectHome=yes
 PrivateTmp=yes
 # The DB-IP geolocation database downloads here and refreshes monthly.
 ReadWritePaths=/opt/zeropoint/app/data
+# Internet only: even a compromised dependency cannot reach other devices on the home network.
+IPAddressDeny=10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 169.254.0.0/16 100.64.0.0/10 fc00::/7 fe80::/10
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+RestrictSUIDSGID=yes
+LockPersonality=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes

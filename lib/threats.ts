@@ -259,7 +259,7 @@ async function fetchFeodo(): Promise<RawThreat[]> {
   return rows.map((r) => ({
     id: `feodo-${r.ip_address}`,
     ip: r.ip_address,
-    port: r.port,
+    port: Number(r.port) || undefined,
     malware: r.malware,
     kind: "botnet" as const,
     reports: 0,
